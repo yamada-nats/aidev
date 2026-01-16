@@ -1,0 +1,136 @@
+---
+title: "AI_05_データの前処理"
+format: html
+---
+
+# CSVファイルからデータを読み込む
+
+```{python}
+# 必要なライブラリのimport
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+```
+
+```{python}
+# CSVファイルの読み込み
+dataset = pd.read_csv("../Lesson05_Data-Preprocessing/baseball_salary.csv")
+```
+
+```{python}
+# datasetの型を確認
+type(dataset)
+```
+
+# データを理解しよう
+
+```{python}
+# 最初の5行を表示
+dataset.head()
+```
+
+```{python}
+# データの形状を確認
+dataset.shape
+```
+
+```{python}
+# 全体的な情報を表示
+dataset.info()
+```
+
+```{python}
+# 行番号を確認
+dataset.index.values
+```
+
+```{python}
+# 列ラベルを確認
+dataset.columns.values
+```
+
+```{python}
+# 行番号は数値型
+print(type(dataset.index.values[0]))
+# 列ラベルは文字型
+print(type(dataset.columns.values[0]))
+
+```
+
+```{python}
+# 列の方を確認する別の方法
+dataset.dtypes
+```
+
+```{python}
+# 列を指定して型を確認
+dataset['推定年俸'].dtype
+```
+
+## 要約統計量の表示
+
+```{python}
+# 要約統計量を表示
+dataset.describe()
+```
+
+## 基本的なデータ操作
+
+### iloc
+
+行列を番号で指定。第一引数で行、第二引数で列を指定する。\
+引数には数値やスライス、リストを指定可。
+
+```{python}
+# データを抜き出す
+# 0行目から4行目、3列目から5列目までをilocで抜き出す
+dataset.iloc[:5, 3:6]
+```
+
+### loc
+
+行を index で、列を columns で指定。\
+locではスライスの終点を含まないが、**locの場合は終わりの要素を含んで指定**するので注意。
+
+```{python}
+# 0行目から4行目、3列目から5列目までをlocで抜き出す
+dataset.loc[:4, '年数':'身長']
+```
+
+### 列名や行番号を指定
+
+列名はリストによる複数の指定が可能。スライスとの組み合わせも可。
+
+```{python}
+# 0行目から4行目、3列目から5列目までを列名や行番号の指定で抜き出す
+dataset[['年数','年齢','身長']][:5]
+```
+
+### フィルタリング
+
+```{python}
+# '年数'が10以上 かつ 打率が3割以上
+dataset.query("年数 >= 10 and 打率 >= 0.3").head()
+```
+
+# データの可視化
+
+```{python}
+# 日本語を使わないデータフレームを作成
+dataset2 = dataset[['球団','推定年俸', '打率']]
+dataset2 = dataset2.rename(columns={'球団': 'team', '推定年俸': 'salary', '打率': 'batting_avg'})
+dataset2 .head()
+```
+
+## ヒストグラム
+
+```{python}
+dataset2['salary'].hist(bins=20)
+
+```
+
+## 散布図
+
+```{python}
+dataset2.plot(kind = 'scatter', x = 'salary', y = 'batting_avg')
+```
