@@ -125,12 +125,41 @@ dataset2 .head()
 ## ヒストグラム
 
 ```{python}
-dataset2['salary'].hist(bins=20)
+tmp = dataset2['salary'].hist(bins=20)
 
+plt.show()
 ```
 
 ## 散布図
 
 ```{python}
-dataset2.plot(kind = 'scatter', x = 'salary', y = 'batting_avg')
+temp = dataset2.plot(kind = 'scatter', x = 'salary', y = 'batting_avg')
+
+plt.show()
+```
+
+## 棒グラフ
+
+```{python}
+# 球団ごとの推定年俸(平均）を salary_by_team に格納
+salary_by_team = dataset2[['team','salary']].groupby('team').mean().reset_index()
+
+# 棒グラフを表示
+tmp = salary_by_team.plot.bar(x='team')
+
+plt.show()
+```
+
+## 箱ひげ図
+
+```{python}
+# 棒グラフで確認した推定年俸上位３チームである球団 g, h, l の「team, salary」を抜き出し
+top3_team = dataset2.query("team in ['g', 'h', 'l']")[['team', 'salary']]
+
+# teamごとのsalaryをboxplotで表示
+ax = top3_team.boxplot(by = 'team')
+# Boxplot ... の下のタイトル表示を抑制
+ax.set_title('')
+
+plt.show()
 ```
