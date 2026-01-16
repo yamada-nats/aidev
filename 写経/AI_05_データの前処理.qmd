@@ -163,3 +163,37 @@ ax.set_title('')
 
 plt.show()
 ```
+
+# 機械学習に向けたデータの準備
+
+## 列の演算
+
+```{python}
+# 安打の中で本塁打の割合
+dataset["本塁打率"] = dataset["本塁打"] / dataset["安打"]
+dataset["本塁打率"].head()
+
+```
+
+```{python}
+# 推定年俸の対数
+dataset['推定年俸の対数'] = np.log10(dataset['推定年俸'])
+dataset['推定年俸の対数'].head()
+```
+
+```{python}
+# 元のdatasetに新たな列が追加されていることを確認
+dataset.head()
+```
+
+## カテゴリーデータの扱い（カテゴリー変数）
+
+分析のためにカテゴリー名のカラムに変換し、その値を 1 か 0 にする。\
+この列を**カテゴリー変数**または**ダミー変数**と呼ぶ。\
+カテゴリー変数を作成するには get_dummies() 関数が利用できる。
+
+```{python}
+# 球団が削除され、代わりに球団のカテゴリー変数が作成されたDataFrameが返る
+dataset3 = pd.get_dummies(data = dataset, columns = ['球団'])
+dataset3.head()
+```
