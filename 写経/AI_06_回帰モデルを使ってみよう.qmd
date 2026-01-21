@@ -1,0 +1,154 @@
+---
+title: "回帰モデル"
+format: html
+jupyter: python3
+---
+
+```{python}
+# 必要なライブラリのimport
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+```
+
+# データ読込
+
+```{python}
+# CSVファイルからデータを読み込む
+dataset_base = pd.read_csv("../Lesson06_Regression-Model/baseball_salary_preprocessed.csv")
+dataset_base.head()
+```
+
+```{python}
+# 列の抜き出し
+dataset = dataset_base[['推定年俸', '打点', '年数', '打率', '本塁打', '球団勝率']]
+
+# 列名をリネームする
+dataset = dataset.rename(
+  columns={
+    '推定年俸': 'salary',
+    '打点': 'points',
+    '年数': 'year_exp',
+    '打率': 'batting',
+    '本塁打': 'homerun',
+    '球団勝率': 'team_win'
+  }
+)
+
+dataset.head()
+```
+
+# 線形回帰モデルを作ってみよう
+
+```{python}
+# 打点と推定年俸の散布図
+tmp = dataset.plot(kind = 'scatter', x = 'points', y = 'salary')
+plt.show()
+```
+
+```{python}
+# 必要なライブラリの追加読み込み
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error
+```
+
+目的変数をY、説明変数をXに取得する。\
+scikit-learnのモデルのfitというメソッドの仕様で、Xは二次元配列を受け付けるようになっているため、Xは括弧を二重にして二次元配列とする。
+
+```{python}
+# 目的変数（Y）：推定年俸
+# 説明変数（X）：打点
+
+Y = np.array(dataset['salary'])
+X = np.array(dataset[['points']])
+
+# 形状を確認
+print("Y=", Y.shape, ", X=", X.shape)
+```
+
+## データの分割
+
+```{python}
+# XとYを機械学習用データ（train）とテストデータ（test）に7:3に分ける
+# random_state はランダムシードの指定
+X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size = 0.3, random_state=0)
+
+# Trainをさらに学習データ（train）と検証データ(valid) に7:3に分ける
+X_train, X_valid, Y_train, Y_valid = train_test_split(X_train, Y_train, test_size = 0.3, random_state=0)
+```
+
+```{python}
+# 形状を確認
+print("Y_train", Y_train.shape, ", X_train",X_train.shape)
+print("Y_valid", Y_valid.shape, ", X_valid",X_valid.shape)
+print("Y_test", Y_test.shape, ", X_test",X_test.shape)
+```
+
+## **アルゴリズムの選択、学習の実施、検証データによる評価**
+
+```{python}
+# 線形回帰モデルの指定
+linear_model = LinearRegression()
+
+# fit() で学習を実施する
+linear_model.fit(X_train, Y_train)
+```
+
+```{python}
+# predict()で予測を実施する
+Y_pred = linear_model.predict(X_valid)
+```
+
+```{python}
+# 正解（検証データの目的変数）と予測値との比較
+print(Y_valid[:5])
+print(Y_pred[:5])
+```
+
+```{python}
+# MSE（平均二乗誤差）を算出
+linear_model_mse = mean_squared_error(Y_valid, Y_pred)
+print('MSE(1変数の線形回帰モデル):', linear_model_mse)
+```
+
+注意したいのはMSEの値は `同じデータ` に対するモデルの相対的な性能を評価するものであるという点です。別のデータ同士のMSEを比較することは意味がないので注意しましょう。
+
+### モデルの確認
+
+今回の線形回帰モデルは以下のような数式でした。
+
+$$
+\displaystyle f_{\theta}(x) = \theta_0 + \theta_1x
+$$
+
+パラメータは以下のようにして取得できます。$\theta_0$ は `p0` で表記し、また。$\theta_1$は `p1` と表記しています。 `coef_[0]` となっているのは、説明変数が複数の場合に係数も複数になるためです。
+
+```{python}
+# interceptは切片という意味
+p0 = linear_model.intercept_
+p1 = linear_model.coef_[0]
+print("p0:", p0, ", p1:", p1)
+```
+
+```{python}
+# パラメータを使った1次関数
+def calc(x):
+  return p0 + p1 * x
+
+# 打点（X）の最小値～最大値の範囲で値を100個作成してリストに格納する
+X_simu = np.linspace(X.min(), X.max(), 100)
+
+# パラメータを使った1次関数による値
+Y_simu = calc(X_simu)
+
+# 線形回帰モデルによる予測値
+Y_prd2 = linear_model.predict(X_simu.reshape(-1,1))
+
+# １次関数：赤い点線、予測値：オレンジ、実際の値：青い散布図
+plt.plot(X_simu, Y_prd2, color = 'orange', linewidth = 8)
+plt.plot(X_simu, Y_simu, color = 'darkred', linewidth = 1, linestyle = 'dashed')
+plt.scatter(X,Y)
+
+plt.show()
+```

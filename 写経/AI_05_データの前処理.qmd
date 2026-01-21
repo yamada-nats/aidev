@@ -133,7 +133,7 @@ plt.show()
 ## 散布図
 
 ```{python}
-temp = dataset2.plot(kind = 'scatter', x = 'salary', y = 'batting_avg')
+tmp = dataset2.plot(kind = 'scatter', x = 'salary', y = 'batting_avg')
 
 plt.show()
 ```
@@ -197,3 +197,123 @@ dataset.head()
 dataset3 = pd.get_dummies(data = dataset, columns = ['球団'])
 dataset3.head()
 ```
+
+### 正規化
+
+```{python}
+# 正規化用にdatasetの一部を抜き出し
+dataset4 = dataset[["推定年俸", "打点"]]
+dataset4.head()
+```
+
+#### z-score normalization
+
+平均値0、標準偏差1に変換します。標準化（Standardization）とも呼ばれます。正規分布にしたがっているデータは主にこちらを使用します。計算式は `（値 - 平均値）／標準偏差` となります。
+
+```{python}
+# z-score normalization
+from sklearn.preprocessing import StandardScaler
+sc = StandardScaler()
+dataset4_std = sc.fit_transform(dataset4)
+```
+
+#### Min-Max Normalization
+
+最小値0、最大値1に変換します。最小値と最大値が決まっていて、データが一様分布の場合はこちらを使用します。計算式は `（値 - 最小値）／（最大値 - 最小値）` となります。
+
+```{python}
+# Min-Max Normalization
+from sklearn.preprocessing import MinMaxScaler
+ms = MinMaxScaler () 
+dataset4_norm = ms.fit_transform(dataset4)
+```
+
+### 欠損値の扱い
+
+isnullで列ごとの欠損値有無を確認\
+sumで行数を合計
+
+```{python}
+# 欠損地の数の確認
+dataset.isnull().sum()
+```
+
+欠損値をなんらかの値で補完するには `fillna` 関数を使用
+
+```{python}
+# 欠損値のある行の例1
+dataset.iloc[4, 0:5]
+```
+
+```{python}
+# 欠損値に平均値を代入。dataset['年数'].mean() で平均値を求めている
+dataset['年数'] = dataset['年数'].fillna(dataset['年数'].mean())
+dataset.iloc[4, 0:5]
+```
+
+欠損値を含む行を削除するには `dropna` 関数を使用
+
+```{python}
+# 欠損値のある行の例2
+dataset.iloc[3, 5:10]
+```
+
+```{python}
+# 欠損値を含む行を削除
+dataset = dataset.dropna()
+dataset.iloc[3, 5:10]
+```
+### 次元削減
+#### 列同士の相関を確認
+```{python}
+# 列同士の相関を確認
+dataset.corr(numeric_only = True)
+```
+
+```{python}
+# 説明用のDataframe作成
+dataset2 = dataset[['推定年俸', '打率', '出塁率']]
+dataset2 = dataset2.rename(columns={'推定年俸': 'salary', '打率': 'batting_avg', '出塁率': 'on_base_per'})
+```
+
+
+```{python}
+# 打率と出塁率の相関性の確認
+tmp = dataset2.plot(kind = 'scatter', x='batting_avg', y='on_base_per')
+plt.show()
+```
+```{python}
+# 推定年俸の打率の相関性の確認
+tmp = dataset2.plot(kind = 'scatter', x='salary', y='batting_avg')
+plt.show()
+```
+
+```{python}
+# 推定年俸と出塁率の相関性の確認
+tmp = dataset2.plot(kind = 'scatter', x='salary', y='on_base_per')
+plt.show()
+```
+
+#### 主成分分析（Principal Component Analysis, PCA）による次元削減
+```{python}
+from sklearn.decomposition import PCA
+
+# batting_avgとon_base_perを取り出して主成分分析（1つの成分にまとめる）
+pca = PCA(n_components=1).fit(dataset2[['batting_avg', 'on_base_per']])
+
+# 主成分分析した結果を基にデータ変換を行い成分を取得する
+values = pca.transform(dataset2[['batting_avg', 'on_base_per']])
+
+# 得られた成分をdataset2に追加
+dataset2['PCA_val'] = values[:,0]
+```
+
+```{python}
+# 推定年俸とPCA成分の相関性の確認
+tmp = dataset2.plot(kind = 'scatter', x='salary', y='PCA_val')
+plt.show()
+```
+
+
+
+
