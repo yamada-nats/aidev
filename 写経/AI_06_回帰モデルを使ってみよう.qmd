@@ -28,7 +28,7 @@ dataset = dataset.rename(
   columns={
     '推定年俸': 'salary',
     '打点': 'points',
-    '年数': 'year_exp',
+    '年数': 'years_exp',
     '打率': 'batting',
     '本塁打': 'homerun',
     '球団勝率': 'team_win'
@@ -164,4 +164,466 @@ Y_log = np.log10(Y)
 # 推定年俸と対数との比較
 print(Y[:5])
 print(Y_log[:5])
+```
+
+```{python}
+# データセットの分割。Y_logを使っていることに注意
+X_train, X_test, Y_train, Y_test = train_test_split(X, Y_log, test_size = 0.3, random_state=0)
+X_train, X_valid, Y_train, Y_valid = train_test_split(X_train, Y_train, test_size = 0.3, random_state=0)
+
+# モデルの作成～予測
+log_model = LinearRegression()
+log_model.fit(X_train, Y_train)
+Y_pred = log_model.predict(X_valid)
+```
+
+```{python}
+# 評価のために対数を金額に戻す
+Y_valid_org = np.power(10, Y_valid)
+Y_pred_org = np.power(10, Y_pred)
+
+# MSEを算出
+log_model_mse = mean_squared_error(Y_valid_org, Y_pred_org)
+print('MSE（1変数の線形回帰モデル～対数版）：', log_model_mse)
+```
+
+### 元のモデルとの比較グラフ
+
+```{python}
+# 打点（X)の最小値～最大値の範囲で値を100個作成してリストに格納する
+X_simu = np.linspace(X.min(), X.max(), 100)
+
+# 線形回帰モデルによる予測値
+Y_prd1 = linear_model.predict(X_simu.reshape(-1,1))
+
+# 線形回帰モデル（対数版）による予測値
+Y_prd2 = log_model.predict(X_simu.reshape(-1,1))
+Y_prd2 = np.power(10, Y_prd2)
+
+# １次関数：赤い点線、予測値：緑、実際の値：青い散布図
+plt.figure()plt.figure()
+plt.plot(X_simu, Y_prd1, color = 'darkred', linewidth = 1, linestyle = 'dashed')
+plt.plot(X_simu, Y_prd2, color = 'green', linewidth = 4, linestyle = 'solid')
+plt.scatter(X,Y)
+
+plt.show()
+```
+
+## 多項式モデル
+
+二次関数以上の式を使ったモデルを `多項式モデル` と呼ぶ。
+
+$$
+\displaystyle f_{\theta}(x) = \theta_0 + \theta_1x + \theta_2x^2 + \theta_3x^3 + \cdots + \theta_nx^n = \sum_{j=0}^{n}{\theta_jx^j}
+$$
+
+### 5次元モデルの例
+
+```{python}
+# 以下の操作用に1次元配列に変換する
+X2 = X.reshape(-1)
+
+# pointsの2～5乗を新たな説明変数として追加
+# np.stack()はndarrayを連結する関数
+# axis:結合する次元を指定。1は列
+X2 = np.stack([X2, X2**2, X2**3, X2**4, X2**5], axis=1)
+
+# 形状を確認
+print("Y=", Y.shape, ", X2=", X2.shape)
+```
+
+```{python}
+# データセットの分割。X2を使っていることに注意
+X_train, X_test, Y_train, Y_test = train_test_split(X2, Y, test_size = 0.3, random_state=0)
+X_train, X_valid, Y_train, Y_valid = train_test_split(X_train, Y_train, test_size = 0.3, random_state=0)
+
+# モデルの作成～予測
+linear_model2 = LinearRegression()
+linear_model2.fit(X_train, Y_train)
+Y_pred = linear_model2.predict(X_valid)
+
+# MSEを算出
+linear_model2_mse = mean_squared_error(Y_valid, Y_pred)
+print('MSE（多項式モデル）：', linear_model2_mse)
+```
+
+### 元のモデルとの比較グラフ
+
+```{python}
+# 打点（X)の最小値～最大値の範囲で値を100個作成してリストに格納する
+X_simu = np.linspace(X.min(), X.max(), 100)
+X_simu2 = np.stack([X_simu, X_simu**2, X_simu**3, X_simu**4, X_simu**5], axis=1)
+
+# 線形回帰モデルによる予測値
+Y_prd1 = linear_model.predict(X_simu.reshape(-1,1))
+# 線形回帰モデルによる予測値
+Y_prd2 = linear_model2.predict(X_simu2)
+
+# １次関数：赤い点線、予測値：緑、実際の値：青い散布図
+plt.figure()
+plt.scatter(X,Y)
+plt.plot(X_simu, Y_prd1, color = 'darkred', linewidth = 1, linestyle = 'dashed')
+plt.plot(X_simu, Y_prd2, color = 'green', linewidth = 4, linestyle = 'solid')
+
+plt.show()
+```
+
+## モデルの複雑さと過学習
+
+```{python}
+# MSEの結果を入れるリスト
+mse_list_train = []
+mse_list_valid = []
+
+# 次元の範囲
+degree = range(2, 41)
+
+for i in degree:
+    # i次元の多項式モデルを作成
+    X3 = X.reshape(-1)
+    X3 = np.stack([X3**j for j in range(1, i)], axis=1)
+    
+    # データセットの分割。X3を使っていることに注意
+    X_train, X_test, Y_train, Y_test = train_test_split(
+      X3, Y,
+      test_size = 0.3, random_state=0
+    )
+    X_train, X_valid, Y_train, Y_valid = train_test_split(
+      X_train, Y_train,
+      test_size = 0.3, random_state=0
+    )
+    
+    # モデルの作成～予測
+    linear_model3 = LinearRegression()
+    linear_model3.fit(X_train, Y_train)
+    
+    # 学習データに対する予測とMSEの算出
+    Y_pred = linear_model3.predict(X_train)
+    mse = mean_squared_error(Y_train, Y_pred)
+    mse_list_train.append(mse)
+    
+    # 検証データに対する予測とMSEの算出
+    Y_pred = linear_model3.predict(X_valid)
+    mse = mean_squared_error(Y_valid, Y_pred)
+    mse_list_valid.append(mse)
+
+# グラフの描画
+# 赤線が学習データ、青線が検証データに対するMSEk
+plt.figure()
+plt.plot(degree, mse_list_train, color="red")
+plt.plot(degree, mse_list_valid, color="blue")
+plt.show()
+```
+
+## 多重線形回帰モデル
+
+2つ以上の説明変数を使ったモデルを `多重線形回帰モデル` と呼ぶ（いわゆる `重回帰分析` と呼ばれるものも同じ意味）。
+
+$$
+\displaystyle f_{\theta}(x_1, x_2, \cdots, x_n) = \theta_0 + \theta_1x_1 + \theta_2x_2 + \theta_3x_3 + \cdots + \theta_nx_n
+$$
+
+```{python}
+# 目的変数（Y）：推定年俸:salary
+# 説明変数（X）：打点:points, 年数:years_exp, 打率:batting, 本塁打:homerun, 球団勝率:team_win
+X4 = np.array(dataset[['points', 'year_exp', 'batting', 'homerun', 'team_win']])
+
+# 形状を確認
+print("Y=", Y.shape, ", X4=", X4.shape)
+```
+
+```{python}
+# データセットの分割。X4を使っていることに注意
+X_train, X_test, Y_train, Y_test = train_test_split(
+    X4, Y,
+    test_size = 0.3, random_state = 0
+)
+
+X_train, X_valid, Y_train, Y_valid = train_test_split(
+    X_train, Y_train,
+    test_size = 0.3, random_state = 0
+)
+
+# モデルの作成～予測
+general_model = LinearRegression()
+general_model.fit(X_train, Y_train)
+Y_pred = general_model .predict(X_valid)
+
+# MSEを算出
+general_model_mse = mean_squared_error(Y_valid, Y_pred)
+print('MSE（多重線形回帰モデル）：', general_model_mse)
+print("係数：",general_model.coef_)
+print("切片：",general_model.intercept_)
+```
+
+# その他の回帰モデル
+
+## Lasso回帰、Ridge回帰
+
+線形回帰モデルに `正則化` という過学習を防ぐ仕組みを取り入れたもの。 `L1正則化` と `L2正則化` の2つがある。
+
+-   Lasso回帰＝L1正則化を取入：余計な説明変数を削除するようパラメータが調整される
+-   Ridge回帰＝L2正則化を取入：パラメータが大きくなるのを防ぎ過学習を抑制する
+
+### Lasso回帰
+
+```{python}
+# Lasso回帰
+from sklearn.linear_model import Lasso
+```
+
+```{python}
+# データセットの分割。X4を使っていることに注意
+X_train, X_test, Y_train, Y_test = train_test_split(
+    X4, Y,
+    test_size = 0.3, random_state = 0
+)
+
+X_train, X_valid, Y_train, Y_valid = train_test_split(
+    X_train, Y_train,
+    test_size = 0.3, random_state = 0
+)
+
+# モデルの作成～予測
+lasso_model = Lasso()
+lasso_model.fit(X_train, Y_train)
+Y_pred = lasso_model .predict(X_valid)
+
+# MSEを算出
+lasso_model_mse = mean_squared_error(Y_valid, Y_pred)
+print('MSE（Lasso回帰）：', lasso_model_mse)
+print("係数：",lasso_model.coef_)
+print("切片：",lasso_model.intercept_)
+```
+
+### Ridge回帰
+
+```{python}
+# Ridge回帰
+from sklearn.linear_model import Ridge
+```
+
+```{python}
+# データセットの分割。X4を使っていることに注意
+X_train, X_test, Y_train, Y_test = train_test_split(
+    X4, Y,
+    test_size = 0.3, random_state = 0
+)
+
+X_train, X_valid, Y_train, Y_valid = train_test_split(
+    X_train, Y_train,
+    test_size = 0.3, random_state = 0
+)
+
+# モデルの作成～予測
+ridge_model = Ridge()
+ridge_model.fit(X_train, Y_train)
+Y_pred = ridge_model .predict(X_valid)
+
+# MSEを算出
+ridge_model_mse = mean_squared_error(Y_valid, Y_pred)
+print('MSE（Lasso回帰）：', ridge_model_mse)
+print("係数：",ridge_model.coef_)
+print("切片：",ridge_model.intercept_)
+```
+
+## 回帰木
+
+分類モデルで使用されることが多い決定木を回帰に応用したのが回帰木
+
+```{python}
+from sklearn.tree import DecisionTreeRegressor
+```
+
+```{python}
+# データセットの分割。X4を使っていることに注意
+X_train, X_test, Y_train, Y_test = train_test_split(
+    X4, Y,
+    test_size = 0.3, random_state = 0
+)
+
+X_train, X_valid, Y_train, Y_valid = train_test_split(
+    X_train, Y_train,
+    test_size = 0.3, random_state = 0
+)
+
+# モデルの作成～予測
+tree_model = DecisionTreeRegressor()
+tree_model.fit(X_train, Y_train)
+Y_pred = tree_model .predict(X_valid)
+
+# MSEを算出
+tree_model_mse = mean_squared_error(Y_valid, Y_pred)
+print('MSE（回帰木）：', tree_model_mse)
+```
+
+## ランダムフォレスト
+
+決定木を複数組み合わせたランダムフォレストを回帰に応用したもの
+
+```{python}
+from sklearn.ensemble import RandomForestRegressor
+```
+
+```{python}
+# データセットの分割。X4を使っていることに注意
+X_train, X_test, Y_train, Y_test = train_test_split(
+    X4, Y,
+    test_size = 0.3, random_state = 0
+)
+
+X_train, X_valid, Y_train, Y_valid = train_test_split(
+    X_train, Y_train,
+    test_size = 0.3, random_state = 0
+)
+
+# モデルの作成～予測
+randomforest_model = RandomForestRegressor(n_estimators = 10, random_state =0)
+randomforest_model.fit(X_train, Y_train)
+Y_pred = randomforest_model .predict(X_valid)
+
+# MSEを算出
+randomforest_model_mse = mean_squared_error(Y_valid, Y_pred)
+print('MSE（ランダムフォレスト）：', randomforest_model_mse)
+```
+
+# より良いモデルを目指して
+
+## モデルと説明変数の選択
+
+単純な方法として、モデルごとにすべての説明変数の組み合わせを総当りで比較する、という方法がある。
+
+### 総当りで最良のMSEを算出する関数
+
+```{python}
+import itertools
+```
+
+#### 関数の作成
+
+```{python}
+def get_best_features(x, y, feature_names, model):
+    # すべての説明変数名の組み合わせを入れるリスト
+    _name_list = []
+    
+    # 指定された長さの組合せを作成する
+    for i in range(1, len(feature_names)+1):
+        for sublist in itertools.combinations(feature_names, i):
+            _name_list.append(list(sublist))
+        
+    # 最良のMSEを入れる変数（大きい値を入れておく）
+    _best_mse = 999999999999
+    _best_mse_name = ''
+    
+    # 総当たりで比較する
+    for _name in _name_list:
+        _x = np.array(x[_name])
+        
+        _x_train, _x_test, _y_train, _y_test = train_test_split(
+            _x, y,
+            test_size=0.3, random_state=0
+        )
+        _x_train, _x_valid, _y_train, _y_valid = train_test_split(
+            _x_train, _y_train,
+            test_size=0.3, random_state=0
+        )
+        # モデルの作成～予測
+        model.fit(_x_train, _y_train)
+        _y_pred = model.predict(_x_valid)
+
+        # MSEを算出
+        _mse = mean_squared_error(_y_valid, _y_pred)
+        
+        # 最小のmseを保管
+        if _mse < _best_mse:
+            _best_mse = _mse
+            _best_mse_name = _name
+            
+    print(model.__class__.__name__, ":", ','.join(_best_mse_name), ": MSE=", _best_mse)
+```
+
+#### 関数の実行
+
+```{python}
+# 説明変数名のリスト
+feature_names = ['points', 'years_exp', 'batting', 'homerun', 'team_win']
+
+# モデルのリストを用意
+model_list = []
+model_list.append(LinearRegression())
+model_list.append(Lasso())
+model_list.append(Ridge())
+model_list.append(DecisionTreeRegressor())
+model_list.append(RandomForestRegressor(n_estimators=100, random_state=0))
+
+for model in model_list:
+    get_best_features(dataset, Y, feature_names, model)
+```
+
+## パラメータのチューニング
+
+scikit-learn の GridSearchCV を使用すると、すべてのパラメータの組み合わせから総当りで最良のものを選択してくれます。
+
+```{python}
+from sklearn.model_selection import GridSearchCV
+```
+
+### ランダムフォレストでの例
+
+ランダムフォレストのパラメータには `n_estimators（木の数）` や `max_depth（木の深さ）` などがあります。
+
+```{python}
+# モデル:ランダムフォレスト
+model = RandomForestRegressor(random_state=0)
+
+# パラメータ:n_estimators:木の数、max_depth:木の深さ
+params = {'n_estimators': [10, 50, 100], 'max_depth': [5, 10, 50]}
+
+# グリッドサーチの設定
+# cv:交差検証の回数, scoring:目的変数
+gscv = GridSearchCV(model, param_grid=params, cv=3, scoring='neg_mean_squared_error')
+```
+
+学習データには、ランダムフォレストで性能が良かった説明変数の組み合わせを指定します。今回は交差検証なので、機械学習用データを学習データと検証データへ分けずにそのまま指定します。
+
+```{python}
+# ランダムフォレストで性能が良かった説明変数の組み合わせを指定
+X5 = np.array(dataset[['years_exp', 'homerun', 'team_win', 'batting']])
+
+# データセットの分割。X5を使っていることに注意
+X_train, X_test, Y_train, Y_test = train_test_split(
+    X5, Y,
+    test_size = 0.3, random_state = 0
+)
+
+# 学習を実施
+gscv.fit(X_train, Y_train)
+```
+
+MSEは `best_score_` で取得（マイナスだが同じ意味）。
+
+```{python}
+# MSE
+gscv.best_score_
+```
+
+最適なパラメータの組み合わせは `best_params_` で取得
+
+```{python}
+# 最適なパラメータ
+gscv.best_params_
+```
+
+#### テストデータによる評価
+
+```{python}
+# 最適なパラメータによる学習
+randomforest_model = RandomForestRegressor(**gscv.best_params_)
+randomforest_model.fit(X_train, Y_train)
+
+# テストデータによる評価
+Y_pred = randomforest_model.predict(X_test)
+
+randomforest_model_mse = mean_squared_error(Y_test, Y_pred)
+print('MSE(ランダムフォレスト):', randomforest_model_mse)
 ```
