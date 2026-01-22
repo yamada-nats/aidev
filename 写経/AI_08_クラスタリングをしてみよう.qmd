@@ -1,0 +1,147 @@
+---
+title: "回帰モデル"
+format: html
+jupyter: python3
+---
+
+```{python}
+# 必要なライブラリのimport
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+
+# seabornの装飾を適用する
+sns.set_theme()
+```
+
+```{python}
+# Irisのデータセットの読み込み
+from sklearn.datasets import load_iris
+iris = load_iris()
+```
+
+```{python}
+# irisのfeature_namesは「sepal length(cm)」のように空白やカッコが付いていて扱いづらいので以下の列名を使用する
+feature_names = ['sepal_length', 'sepal_width', 'petal_length', 'petal_width']
+
+# datasetの作成
+dataset = pd.DataFrame(data = iris['data'], columns = feature_names)
+dataset['species'] = iris['target']
+dataset.head()
+```
+
+# ここから先をレッスン7用のファイルに転記する
+
+```{python}
+sns.pairplot(dataset, hue='species', diag_kind= 'hist')
+plt.show()
+
+```
+
+# パーセプトロン
+
+パーセプトロンは、複数の**入力**を受け取り、1つの値を**出力**する機械学習のモデルの一種。
+
+## 二値分類
+
+```{python}
+# 「setosaかそれ以外か」の列
+is_setosa = (dataset['species'] == 0).astype(np.int64)
+
+# datasetに追加
+dataset['is_setosa'] = is_setosa
+dataset.head()
+```
+
+```{python}
+# setosaとそれ以外で分類した散布図
+sns.lmplot(
+  x = 'petal_width', y = 'petal_length',
+  hue = 'is_setosa',
+  data = dataset,
+  fit_reg = False
+)
+plt.show()
+```
+
+```{python}
+# 必要なライブラリの追加読み込み
+from sklearn.linear_model import Perceptron
+from sklearn.model_selection import train_test_split
+```
+
+```{python}
+# 目的変数（Y）：is_setosa、説明変数（X）：petal_widthとpetal_length
+Y = np.array(dataset['is_setosa'])
+X = np.array(dataset[['petal_width', 'petal_length']])
+```
+
+```{python}
+# 形状を確認
+print("Y=", Y.shape, ", X=", X.shape)
+```
+
+```{python}
+# データの分割
+X_train, X_test, Y_train, Y_test = train_test_split(
+  X, Y,
+  test_size=0.3, random_state=0
+)
+X_train, X_valid, Y_train, Y_valid = train_test_split(
+  X_train, Y_train,
+  test_size=0.3, random_state=0
+)
+```
+
+```{python}
+perceptron_model = Perceptron()
+perceptron_model.fit(X_train, Y_train)
+Y_pred = perceptron_model.predict(X_valid)
+```
+
+```{python}
+# 正解（検証データの目的変数）と予測値との比較
+print(Y_valid[:5])
+print(Y_pred[:5])
+```
+
+### モデルの確認
+
+パーセプトロンは線形なので、重みは線形回帰モデルと同様にして取得可能。
+
+```{python}
+w0 = perceptron_model.intercept_[0]
+w1 = perceptron_model.coef_[0][0]
+w2 = perceptron_model.coef_[0][1]
+
+print("w0:", w0, ", w1:", w1, ", w2:", w2)
+```
+
+```{python}
+# モデルの式
+x1 = np.linspace(0, 3, 10)
+x2 = (2 - 1.2 * x1) / 0.7
+
+plt.figure()
+# 実際の値（setosa以外）
+data = dataset.query("is_setosa == 0")
+plt.scatter(data['petal_width'],data['petal_length'], color = "blue", label = 0)
+
+# 実際の値（setosa)
+data = dataset.query("is_setosa == 1")
+plt.scatter(data['petal_width'],data['petal_length'], color = "orange", label = 1)
+
+# モデルの式（setosaの部分）
+plt.plot(x1, x2, color = "green", linewidth = 2)
+plt.fill_between(x1, x2,color = "green", linewidth = 0, alpha = .05)
+
+# グラフ全体の大きさを指定
+plt.xlim(0, 2.8)
+plt.ylim(0, 7.5)
+
+# 凡例の表示
+plt.legend(loc = "upper left", title = "is_setosa")
+
+plt.show()
+```
