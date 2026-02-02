@@ -70,6 +70,7 @@ dataset = pd.DataFrame(data = iris['data'], columns = feature_names)
 dataset['species'] = iris['target']
 dataset.head()
 ```
+
 ```{python}
 sns.pairplot(dataset, hue='species', diag_kind= 'hist')
 plt.show()
@@ -154,10 +155,25 @@ w2 = perceptron_model.coef_[0][1]
 print("w0:", w0, ", w1:", w1, ", w2:", w2)
 ```
 
+散布図に直線で表現すると、
+
+$$
+w_0 + w_1 x_1 + w_2 x_2 = 0
+$$
+
+つまり
+
+$$
+x_2 = \frac{w_0 + w_1 x_1}{- w_2}
+$$
+
+※ここで言うx2はY軸方向の値
+
 ```{python}
 # モデルの式
 x1 = np.linspace(0, 3, 10)
-x2 = (2 - 1.2 * x1) / 0.7
+x2 = (2 - 1.2 * x1) / 0.7　
+# perceptron_modelで得た切片と係数
 
 plt.figure()
 # 実際の値（setosa以外）
@@ -181,3 +197,59 @@ plt.legend(loc = "upper left", title = "is_setosa")
 
 plt.show()
 ```
+
+### モデルの評価
+
+分類モデルの場合「どのぐらい正解しているか」が評価基準となる。
+
+#### 正解率
+
+「全体のなかで正解したものの割合」
+
+```{python}
+# 正解率
+from sklearn.metrics import accuracy_score
+accuracy_score(Y_valid, Y_pred)
+```
+
+#### 適合率
+
+「正解と判断した中で真に正解の割合」
+
+```{python}
+# 適合率
+from sklearn.metrics import precision_score
+precision_score(Y_valid, Y_pred)
+```
+
+#### 再現率
+
+「真に正解のうち正解と判断した割合」
+
+```{python}
+# 再現率
+from sklearn.metrics import recall_score
+recall_score(Y_valid, Y_pred)
+```
+
+#### F1値
+
+適合率と再現率の調和平均（逆数の平均を求め、それを逆数にした値）
+
+```{python}
+# F1値
+from sklearn.metrics import f1_score
+f1_score(Y_valid, Y_pred)
+```
+
+#### まとめて出力
+
+```{python}
+# モデルの評価をまとめて出力
+from sklearn.metrics import classification_report
+print(classification_report(Y_valid, Y_pred))
+```
+
+# ロジスティック回帰
+
+「1か0」ではなく「setosaである確率」を出力する
