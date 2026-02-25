@@ -62,7 +62,7 @@ iris['target_names']
 以降の処理で使うデータセットの作成
 
 ```{python}
-# irisのfeature_namesは「sepal length(cm)」のように空白やカッコが付いていて扱いづらいので以下の列名を使用する
+# irisのfeature_namesは「sepal length(cm)」 のように空白やカッコが付いていて扱いづらいので以下の列名を使用する
 feature_names = ['sepal_length', 'sepal_width', 'petal_length', 'petal_width']
 
 # datasetの作成
@@ -253,3 +253,225 @@ print(classification_report(Y_valid, Y_pred))
 # ロジスティック回帰
 
 「1か0」ではなく「setosaである確率」を出力する
+
+## シグモイド関数
+
+※下記 $exp(-ax)$ は $e^{-ax}$ のこと
+
+$$
+y = \frac{1}{1 + \exp(-ax)}
+$$
+
+```{python}
+from sklearn.linear_model import LogisticRegression
+```
+
+```{python}
+# ロジスティック回帰のモデルを作成し、学習して予測
+logistic_model = LogisticRegression()
+logistic_model.fit(X_train, Y_train)
+Y_pred = logistic_model.predict(X_valid)
+
+# モデルの評価
+print(classification_report(Y_valid, Y_pred))
+```
+
+## 多クラス分類
+
+```{python}
+# Y:目的変数、X:説明変数
+Y = np.array(dataset['species'])
+X = np.array(dataset[['sepal_length', 'sepal_width', 'petal_length', 'petal_width']])
+```
+
+```{python}
+# データの分割
+X_train, X_test, Y_train, Y_test = train_test_split(
+  X, Y,
+  test_size=0.3, random_state=0
+)
+X_train, X_valid, Y_train, Y_valid = train_test_split(
+  X_train, Y_train,
+  test_size=0.3, random_state=0
+)
+```
+
+```{python}
+# ロジスティック回帰（多クラス分類）のモデルを作成し、学習して予測
+logistic_model = LogisticRegression()
+logistic_model.fit(X_train, Y_train)
+Y_pred = logistic_model.predict(X_valid)
+
+# モデルの評価
+print(classification_report(Y_valid, Y_pred))
+```
+
+# 決定木とランダムフォレスト
+
+## 決定木
+
+決定木は直線では分類が難しいようなデータに向いているが、どこまでもデータを分割できるので、過学習が起こりやすいと言われている。よって以下のようなパラメータをチューニングして、最適なモデルを構築する。
+
+-   木の深さ
+-   リーフの数
+-   ノードを分割するために必要なデータの数
+-   リーフを構成するために必要なデータの数
+
+```{python}
+# 必要なライブラリの追加読み込み
+from sklearn.tree import DecisionTreeClassifier
+```
+
+データはロジスティック回帰で作成したものを利用
+
+```{python}
+# 決定木のモデルを作成し、学習して予測
+tree_model = DecisionTreeClassifier(criterion = 'entropy')
+tree_model.fit(X_train, Y_train)
+Y_pred = tree_model.predict(X_valid)
+
+# モデルの評価
+print(classification_report(Y_valid, Y_pred))
+```
+
+精度があまり高くないため、パラメータのチューニングのためグリッドSearchを使う
+
+```{python}
+# グリッドサーチを使う
+from sklearn.model_selection import GridSearchCV
+
+# モデル:決定木
+model = DecisionTreeClassifier()
+
+# max_depth:木の深さ, min_samples_split:ノードを分割するために必要なデータの数
+params = {
+    'criterion': ['gini', 'entropy'],
+    'max_depth': [5, 10, 50],
+    'min_samples_split': [2, 4, 10]
+}
+
+# グリッドサーチ
+gscv = GridSearchCV(model, param_grid = params, cv = 3)
+
+# データの分割:機械学習用データを学習と検証に分けるのはクロスバリデーションで行ってくれる
+Xg_train, Xg_test, Yg_train, Yg_test = train_test_split(
+  X, Y,
+  test_size = 0.3, random_state = 0
+)
+
+gscv.fit(Xg_train, Yg_train)
+```
+
+```{python}
+# 最適なパラメータ
+gscv.best_params_
+```
+
+最適なパラメータを元に構築し直す\
+※テキストだと以下の結果になっていて、そちらの方が性能がいい。なぜ。
+
+```         
+'criterion': 'gini', 'max_depth': 10, 'min_samples_split': 10
+```
+
+```{python}
+# 最適なパラメータによる決定木のモデル作成と学習、予測
+tree_model = DecisionTreeClassifier(
+  criterion = 'gini',
+  max_depth = 5,
+  min_samples_split = 2
+)
+tree_model.fit(X_train, Y_train)
+Y_pred = tree_model.predict(X_valid)
+
+# モデルの評価
+print(classification_report(Y_valid, Y_pred))
+```
+
+## ランダムフォレスト
+
+複数の決定木を組み合わせて予測性能を高くしたモデル
+
+```{python}
+# 必要なライブラリの追加読み込み
+from sklearn.ensemble import RandomForestClassifier
+```
+
+```{python}
+# ランダムフォレストのモデルを作成し、学習して予測
+randomforest_model = RandomForestClassifier(n_estimators = 100)
+randomforest_model.fit(X_train, Y_train)
+Y_pred = randomforest_model.predict(X_valid)
+
+# モデルの評価
+print(classification_report(Y_valid, Y_pred))
+```
+
+グリッドサーチで最適なパラメータを探る
+
+```{python}
+# グリッドサーチを使う
+# モデル：ランダムフォレスト
+model = RandomForestClassifier()
+
+# max_depth:木の深さ, min_samples_split:ノードを分割するために必要なデータの数
+params = {
+    'n_estimators': [10, 50, 100],
+    'max_depth': [5, 10, 50]
+}
+
+# グリッドサーチ
+gscv = GridSearchCV(model, param_grid = params, cv = 3)
+
+# データの分割:機械学習用データを学習と検証に分けるのはクロスバリデーションで行ってくれる
+Xg_train, Xg_test, Yg_train, Yg_test = train_test_split(
+  X, Y,
+  test_size = 0.3, random_state = 0
+)
+
+gscv.fit(Xg_train, Yg_train)
+```
+
+```{python}
+# 最適なパラメータ
+gscv.best_params_
+```
+
+```{python}
+# 最適なパラメータによるランダムフォレストのモデル作成と学習、予測
+randomforest_model = RandomForestClassifier(n_estimators = 100, max_depth = 5)
+randomforest_model.fit(X_train, Y_train)
+Y_pred = randomforest_model.predict(X_valid)
+
+# モデルの評価
+print(classification_report(Y_valid, Y_pred))
+```
+
+# サポートベクターマシーン（SVM）
+
+SVMとは、マージンを最大化するようにデータを分割する境界線を決定するモデル。分割線を決めるのに重要なのは分割線から近いデータであり、このデータをサポートベクトルと呼ぶ。
+
+```{python}
+# 必要なライブラリの追加読み込み
+from sklearn.svm import SVC
+```
+
+```{python}
+# SVMのモデルを作成し、学習して予測
+svm_model = SVC()
+svm_model.fit(X_train, Y_train)
+Y_pred = svm_model.predict(X_valid)
+
+# モデルの評価
+print(classification_report(Y_valid, Y_pred))
+```
+
+テストデータによる汎化性能の評価
+
+```{python}
+# テストデータによる評価
+Y_pred = svm_model.predict(X_test)
+
+# モデルの評価
+print(classification_report(Y_test, Y_pred))
+```
