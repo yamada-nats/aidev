@@ -1,0 +1,70 @@
+---
+title: "クラスタリング"
+format: html
+---
+
+```{python}
+# 必要なライブラリのimport
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+
+# Tensorflow
+import tensorflow as tf
+
+# データの分割
+from sklearn.model_selection import train_test_split
+
+# MSE
+from sklearn.metrics import mean_squared_error
+
+# DataFrameで全ての列を表示する設定
+pd.options.display.max_columns = None
+```
+
+# データ読込
+
+```{python}
+dataset_base = pd.read_csv("./Lesson10_Deep-Learning/baseball_salary_preprocessed.csv")
+dataset_base.head()
+```
+
+```{python}
+# 列の抜き出し
+dataset = dataset_base[['推定年俸', '打点', '年数', '打率', '本塁打', '球団勝率']]
+
+# 列名をリネームする
+dataset = dataset.rename(columns={'推定年俸': 'salary', '打点': 'points', '年数': 'years_exp', '打率': 'batting', '本塁打': 'homerun', '球団勝率': 'team_win'})
+```
+
+# データのま処理
+
+```{python}
+# MinMaxScalerで正規化を実施
+from sklearn.preprocessing import MinMaxScaler
+sc = MinMaxScaler()
+dataset_std = sc.fit_transform(dataset)
+dataset_std.shape
+```
+
+```{python}
+# 目的変数Y:dataset_stdの0列
+Y = dataset_std[:, 0]
+
+# 特徴量X:datastd_stdの1列目以降
+X = dataset_std[:, 1:]
+print("Y:", Y.shape)
+print("X:", X.shape)
+```
+
+
+```{python}
+X_train, X_test, Y_train, Y_test = train_test_split(
+  dataset, Y,
+  test_size = 0.3, random_state = 0
+)
+X_train, X_valid, Y_train, Y_valid = train_test_split(
+  X_train, Y_train,
+  test_size = 0.3, random_state = 0
+)
+```
