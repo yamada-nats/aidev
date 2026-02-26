@@ -1,0 +1,213 @@
+---
+title: "クラスタリング"
+format: html
+jupyter: python3
+---
+
+```{python}
+# 必要なライブラリのimport
+import numpy as np
+
+# 文章データ分析用
+import glob
+import collections
+from sklearn.feature_extraction import DictVectorizer
+```
+
+# データ読込
+
+```{python}
+# それぞれのフォルダーのファイル名が「0」から始まるファイルの一覧を取得
+# glob.glob：条件に一致するファイルリストを返す
+easy_ham_files = glob.glob("../Lesson09_ML-Practice/easy_ham/0*")
+hard_ham_files = glob.glob("../Lesson09_ML-Practice/hard_ham/0*")
+spam_files = glob.glob("../Lesson09_ML-Practice/spam/0*")
+```
+
+```{python}
+# それぞれのファイル数を確認
+print(len(easy_ham_files))
+print(len(hard_ham_files))
+print(len(spam_files))
+```
+
+```{python}
+# ファイル名をまとめたリストを用意
+filenames = easy_ham_files + hard_ham_files + spam_files
+len(filenames)
+```
+
+```{python}
+# エンコーディング用定数（以下で繰り返し指定するため定数にしておく）
+ENCODING = 'latin-1'
+```
+
+```{python}
+# 最初のファイルの内容を確認
+with open(filenames[0], 'r', encoding = ENCODING) as f:
+    text = f.read()
+    print(text)
+```
+
+```{python}
+# 最後のファイルの内容を確認
+with open(filenames[1-], 'r', encoding = ENCODING) as f:
+    text = f.read()
+    print(text)
+```
+
+# データの前処理 - 形態素解析と特徴量の作成
+
+## Bag-of-Words方式
+
+ノイズ除去・形態素解析（単語に分割）・表記ゆれの補正（小文字に変換）・結果のフィルタリング（一定以上の文字数の単語のみ返す）をまとめた関数を作成
+
+```{python}
+# 文字列のなかで使われている単語ごとの数を返す
+def get_word_count(text, min_length = 3):
+    # ノイズの除去：不要と思われる文字を除去する
+    for ch in ".,:;!?-+*/=()[]{}<>~^#$@%&'\"_0123456789":
+        text = text.replace(ch, ' ')
+   
+    # 形態素解析：文章を単語に分割
+    # strip() は文字列前後の空白文字を除去、split() 関数は文字列を分割
+    _words = text.strip().split()
+    
+    # 表記のゆれの補正：
+    # 単語のリストを受け取り、指定された文字数以上の単語だけをすべて小文字にして返す
+    _words = [_word.lower() for _word in _words if len(_word) >= min_length]
+    
+    # collections.Counterの戻り値は辞書型のサブクラス
+    _count = collections.Counter(_words)
+
+    # 辞書型に変換して返す
+    return(dict(_count))
+```
+
+```{python}
+# 最初のファイルでテスト
+with open(filenames[0], 'r', encoding = ENCODING) as f:
+    text = f.read()
+    
+get_word_count(text)
+```
+
+```{python}
+# 単語ごとの数のリスト
+word_count_data = []
+
+# すべてのファイルに対して実施
+for filename in filenames:
+    with open(filename, 'r', encoding = ENCODING) as f:
+        text = f.read()
+        count = get_word_count(text)
+        word_count_data.append(count)
+
+```
+
+```{python}
+# リストの長さ
+len(word_count_data)
+```
+
+```{python}
+# リストの最初の内容
+word_count_data[0]
+```
+
+```{python}
+# 行列に変換してdatasetに格納する
+vec = DictVectorizer()
+dataset = vec.fit_transform(word_count_data)
+```
+
+```{python}
+dataset
+```
+
+```{python}
+# 各列に対応した単語を取得
+vec.get_feature_names_out()
+```
+
+```{python}
+# 型の確認
+type(dataset)
+```
+
+```{python}
+# 0でない要素だけ保持していることを確認
+print(dataset[0])
+```
+
+# 機械学習の実施
+
+```{python}
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+```
+
+`ハム（ham）=0、スパム（spam）=1`のリストを用意\
+※今回は easy_ham2500件、hard_ham250件、spam500件の順で読み込んでいるので、以下のように作成
+
+```{python}
+# 目的変数の用意
+Y = [0]*2500 + [0]*250 + [1]*500
+```
+
+```{python}
+# データの分割
+X_train, X_test, Y_train, Y_test = train_test_split(
+  dataset, Y,
+  test_size=0.3, random_state=0
+)
+X_train, X_valid, Y_train, Y_valid = train_test_split(
+  X_train, Y_train,
+  test_size=0.3, random_state=0
+)
+```
+
+```{python}
+# ロジスティック回帰の実施
+logistic_model = LogisticRegression(max_iter = 2000)
+logistic_model.fit(X_train, Y_train)
+Y_pred = logistic_model.predict(X_valid)
+
+# モデルの評価
+print(classification_report(Y_valid, Y_pred))
+```
+
+## 学習結果の考察
+
+```{python}
+print("datasetの大きさ:", dataset.shape)
+print("単語辞書の長さ:", len(vec.get_feature_names_out()))
+print("モデルのパラメータ数:", logistic_model.coef_.shape)
+```
+
+`logistic_model.coef_` は、各説明変数（特徴量）が予測結果（ターゲットが「1」になる確率）に与える影響の強さと方向を表す係数（回帰係数）\
+つまり、大きいほど「スパムらしさ対する寄与が高い」
+
+```{python}
+import pandas as pd
+
+# 単語とパラメータの表を作成
+coef_df = pd.DataFrame({
+    'featrue_name': vec.get_feature_names_out(),
+    'coef': logistic_model.coef_[0]
+})
+
+# 先頭5行を表示
+coef_df.head()
+```
+
+```{python}
+# スパムらしさに対する寄与が高い一覧
+coef_df.sort_values('coef', ascending = False).head(20)
+```
+
+```{python}
+# ハムらしさに対する寄与が高い一覧
+coef_df.sort_values('coef').head(20)
+```

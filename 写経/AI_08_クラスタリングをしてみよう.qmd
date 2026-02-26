@@ -15,4 +15,191 @@ import pandas as pd
 sns.set_theme()
 ```
 
+```{python}
+# Irisのデータセットの読み込み
+from sklearn.datasets import load_iris
+iris = load_iris()
+```
 
+```{python}
+# irisのfeature_namesは「sepal length(cm)」 のように空白やカッコが付いていて扱いづらいので以下の列名を使用する
+feature_names = ['sepal_length', 'sepal_width', 'petal_length', 'petal_width']
+
+# datasetの作成
+dataset = pd.DataFrame(data = iris['data'], columns = feature_names)
+dataset['species'] = iris['target']
+dataset.head()
+```
+
+```{python}
+# petal_width と petal_length による散布図
+sns.lmplot(x = 'petal_width', y = 'petal_length', data = dataset, fit_reg = False)
+plt.show()
+```
+
+# k-means法
+
+```{python}
+# KMeansのimport
+from sklearn.cluster import KMeans
+```
+
+```{python}
+# データ（X）：petal_widthとpetal_length
+X = np.array(dataset[['petal_width', 'petal_length']])
+
+# 形状を確認
+print("X = ", X.shape)
+```
+
+-   n_clusters：クラスタの数
+-   init： k-means++でk-means++法、または randomでk-means法を指定
+-   n_init：異なるシードを使ってクラスタリングを繰り返す数
+
+```{python}
+# クラスタ数を3としてモデルを作成
+kmeans_model = KMeans(n_clusters = 3, init = 'k-means++', n_init = 10)
+kmeans_model.fit(X)
+```
+
+`predict()` でクラスタ番号（予測値）を取得。\
+`fit_predict`で学習とクラスタ番号の取得をまとめて行うことも可能。
+
+```{python}
+# クラスタ番号（予測値）を取得
+# （補足）kmeans_model.fit_predict(X)：fitとpredictをまとめて実施
+Y_pred = kmeans_model.predict(X)
+Y_pred
+```
+
+```{python}
+# グラフ化用DataFrameを作成して、tempに格納
+temp = dataset[['petal_width', 'petal_length', 'species']].copy()
+temp['cluster'] = kmeans_model.labels_
+
+# k-means法によるクラスタリングの結果を描画
+ax = sns.lmplot(
+    x = 'petal_width',
+    y = 'petal_length',
+    data = temp,
+    hue = 'cluster',
+    fit_reg = False
+)
+ax.set(title = 'cluster')
+plt.show()
+```
+
+```{python}
+# アヤメの品種（正解）を描画
+ax = sns.lmplot(
+    x = 'petal_width',
+    y = 'petal_length',
+    data = temp,
+    hue = 'species',
+    fit_reg = False
+)
+ax.set(title = 'species')
+plt.show()
+```
+
+# クラスタリングの評価
+
+-   凝集性：各グループ内でデータの距離が近いこと。前述した WCSS（シードとデータとの距離の総和）が小さいことを意味します
+-   分離性：各クラスター同士が離れていること
+
+## 凝集性（エルボーメソッドのグラフ）
+
+```{python}
+# 各クラスタごとのWCSSを格納するリスト
+wcss = []
+
+# クラスタ数のリスト（1から9)
+c_list = np.arange(1, 10)
+
+for c in c_list:
+    # クラスタ数を c で指定
+    kmeans_model = KMeans(n_clusters = c, init = 'k-means++', n_init = 10)
+    kmeans_model.fit(X)
+    # inertia_プロパティに、WCSSが格納されている
+    wcss.append(kmeans_model.inertia_)
+```
+
+```{python}
+# WCSSの表示
+wcss
+```
+
+```{python}
+# グラフ化
+plt.clf()
+sns.lineplot(x = c_list, y = wcss)
+plt.show()
+
+```
+
+## 凝集性と分離性（シルエットプロットのグラフ）
+
+シルエットスコアは、クラスタに属するデータとシードとの距離を -1～1 の値の範囲で表したものです。1 に近いほど、自クラスタのシードに近く、-1 に近いほど、他のクラスタのシードに近い（自クラスタのシードからは遠い）と言えます。
+
+```{python}
+# 必要なライブラリの追加import
+from sklearn.metrics import silhouette_score, silhouette_samples
+```
+
+```{python}
+# クラスタ数の指定
+cluster_no = 3
+
+# クラスタリング
+kmeans_model = KMeans(n_clusters = cluster_no, init = 'k-means++', n_init = 10)
+Y_pred = kmeans_model.fit_predict(X)
+```
+
+```{python}
+# シルエットスコアの平均値
+s_average = silhouette_score(X, Y_pred)
+
+# 各データのシルエットスコア
+s_score = silhouette_samples(X, Y_pred, metric = 'euclidean')
+```
+
+```{python}
+# シルエットプロットを描画
+# 参考： https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html
+fig = plt.figure()
+ax1 = fig.add_subplot(1, 1, 1)
+y_lower = 0
+
+for i in range(cluster_no):
+    # Aggregate the silhouette scores for samples belonging to
+    # cluster i, and sort them
+    ith_cluster_silhouette_values = s_score[Y_pred == i]
+    ith_cluster_silhouette_values.sort()
+    
+    size_cluster_i = ith_cluster_silhouette_values.shape[0]
+    y_upper = y_lower + size_cluster_i
+    
+    #color = cm.nipy_spectral(float(i) / n_clusters)
+    ax1.fill_betweenx(
+        np.arange(y_lower, y_upper),
+        0,ith_cluster_silhouette_values
+    )
+    
+    # Label the silhouette plots with their cluster numbers at the middle
+    ax1.text(-0.05, y_lower+0.5 * size_cluster_i, str(i))
+    
+    # Compute the new y_lower for next plot
+    y_lower = y_upper + 10 # 10 for the space between silhouette plots
+    
+ax1.set_title("The silhouette plot for the various clusters.")
+ax1.set_xlabel("The silhouette coefficient values")
+ax1.set_ylabel("Cluster label")
+    
+# The vertical line for average silhouette score of all the values
+ax1.axvline(x=s_average, color="red", linestyle="--")
+
+ax1.set_yticks([])  # Clear the yaxis labels / ticks
+ax1.set_xticks([-0.1, 0, 0.2, 0.4, 0.6, 0.8, 1])
+
+plt.show()
+```
