@@ -1,6 +1,5 @@
 ---
 title: "AI_05_データの前処理"
-format: html
 ---
 
 # CSVファイルからデータを読み込む
@@ -14,7 +13,7 @@ import matplotlib.pyplot as plt
 
 ```{python}
 # CSVファイルの読み込み
-dataset = pd.read_csv("../Lesson05_Data-Preprocessing/baseball_salary.csv")
+dataset = pd.read_csv("./Lesson05_Data-Preprocessing/baseball_salary.csv")
 ```
 
 ```{python}
@@ -263,8 +262,11 @@ dataset.iloc[3, 5:10]
 dataset = dataset.dropna()
 dataset.iloc[3, 5:10]
 ```
+
 ### 次元削減
+
 #### 列同士の相関を確認
+
 ```{python}
 # 列同士の相関を確認
 dataset.corr(numeric_only = True)
@@ -276,12 +278,12 @@ dataset2 = dataset[['推定年俸', '打率', '出塁率']]
 dataset2 = dataset2.rename(columns={'推定年俸': 'salary', '打率': 'batting_avg', '出塁率': 'on_base_per'})
 ```
 
-
 ```{python}
 # 打率と出塁率の相関性の確認
 tmp = dataset2.plot(kind = 'scatter', x='batting_avg', y='on_base_per')
 plt.show()
 ```
+
 ```{python}
 # 推定年俸の打率の相関性の確認
 tmp = dataset2.plot(kind = 'scatter', x='salary', y='batting_avg')
@@ -295,6 +297,7 @@ plt.show()
 ```
 
 #### 主成分分析（Principal Component Analysis, PCA）による次元削減
+
 ```{python}
 from sklearn.decomposition import PCA
 
@@ -313,7 +316,3 @@ dataset2['PCA_val'] = values[:,0]
 tmp = dataset2.plot(kind = 'scatter', x='salary', y='PCA_val')
 plt.show()
 ```
-
-
-
-

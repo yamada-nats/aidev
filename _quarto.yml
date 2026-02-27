@@ -1,0 +1,11 @@
+project:
+  execute-dir: project # ルートディレクトリをRprojの場所にする
+  
+execute:
+  warning: false  # 警告を非表示
+
+format:
+  html:
+    theme: cosmo    # 全体のテーマ（見た目）
+    
+jupyter: python3

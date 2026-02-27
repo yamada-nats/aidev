@@ -1,7 +1,5 @@
 ---
-title: "クラスタリング"
-format: html
-jupyter: python3
+title: "AI_08_クラスタリング"
 ---
 
 ```{python}

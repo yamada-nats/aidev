@@ -1,6 +1,7 @@
 .venv
 .Rproj.user
 .Rhistory
+.quarto
 Lesson09_ML-Practice/easy_ham/
 Lesson09_ML-Practice/hard_ham/
 Lesson09_ML-Practice/spam/

@@ -1,9 +1,5 @@
 ---
-title: "クラスタリング"
-format: html
-execute:
-  warning: false
-  message: false
+title: "ディープラーニング01"
 ---
 
 ```{python}
@@ -28,7 +24,7 @@ pd.options.display.max_columns = None
 # データ読込
 
 ```{python}
-dataset_base = pd.read_csv("../Lesson10_Deep-Learning/baseball_salary_preprocessed.csv")
+dataset_base = pd.read_csv("./Lesson10_Deep-Learning/baseball_salary_preprocessed.csv")
 dataset_base.head()
 ```
 
@@ -223,6 +219,7 @@ Y_pred_ = sc.inverse_transform(
 mse = mean_squared_error(Y_test_, Y_pred_)
 print('MSE(Keras回帰モデル):', mse)
 ```
+
 ```{python}
 # 予測値と正解の散布図の表示
 plt.clf() # plotの初期化
@@ -231,4 +228,3 @@ plt.xlabel("ture data")
 plt.ylabel("prediction")
 plt.show()
 ```
-

@@ -1,7 +1,5 @@
 ---
-title: "クラスタリング"
-format: html
-jupyter: python3
+title: "AI_09_実践機械学習"
 ---
 
 ```{python}
@@ -19,9 +17,9 @@ from sklearn.feature_extraction import DictVectorizer
 ```{python}
 # それぞれのフォルダーのファイル名が「0」から始まるファイルの一覧を取得
 # glob.glob：条件に一致するファイルリストを返す
-easy_ham_files = glob.glob("../Lesson09_ML-Practice/easy_ham/0*")
-hard_ham_files = glob.glob("../Lesson09_ML-Practice/hard_ham/0*")
-spam_files = glob.glob("../Lesson09_ML-Practice/spam/0*")
+easy_ham_files = glob.glob("./Lesson09_ML-Practice/easy_ham/0*")
+hard_ham_files = glob.glob("./Lesson09_ML-Practice/hard_ham/0*")
+spam_files = glob.glob("./Lesson09_ML-Practice/spam/0*")
 ```
 
 ```{python}

@@ -1,7 +1,5 @@
 ---
-title: "回帰モデル"
-format: html
-jupyter: python3
+title: "AI_07_分類モデル"
 ---
 
 ```{python}

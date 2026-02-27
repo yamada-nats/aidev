@@ -1,7 +1,5 @@
 ---
-title: "回帰モデル"
-format: html
-jupyter: python3
+title: "AI_06_回帰モデル"
 ---
 
 ```{python}
@@ -15,7 +13,7 @@ import pandas as pd
 
 ```{python}
 # CSVファイルからデータを読込
-dataset_base = pd.read_csv("../Lesson06_Regression-Model/baseball_salary_preprocessed.csv")
+dataset_base = pd.read_csv("./Lesson06_Regression-Model/baseball_salary_preprocessed.csv")
 dataset_base.head()
 ```
 
