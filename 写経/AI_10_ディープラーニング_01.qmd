@@ -1,6 +1,9 @@
 ---
 title: "クラスタリング"
 format: html
+execute:
+  warning: false
+  message: false
 ---
 
 ```{python}
@@ -25,7 +28,7 @@ pd.options.display.max_columns = None
 # データ読込
 
 ```{python}
-dataset_base = pd.read_csv("./Lesson10_Deep-Learning/baseball_salary_preprocessed.csv")
+dataset_base = pd.read_csv("../Lesson10_Deep-Learning/baseball_salary_preprocessed.csv")
 dataset_base.head()
 ```
 
@@ -37,7 +40,9 @@ dataset = dataset_base[['推定年俸', '打点', '年数', '打率', '本塁打
 dataset = dataset.rename(columns={'推定年俸': 'salary', '打点': 'points', '年数': 'years_exp', '打率': 'batting', '本塁打': 'homerun', '球団勝率': 'team_win'})
 ```
 
-# データのま処理
+# 回帰モデル　ディープラーニング
+
+## データの前処理
 
 ```{python}
 # MinMaxScalerで正規化を実施
@@ -57,10 +62,9 @@ print("Y:", Y.shape)
 print("X:", X.shape)
 ```
 
-
 ```{python}
 X_train, X_test, Y_train, Y_test = train_test_split(
-  dataset, Y,
+  X, Y,
   test_size = 0.3, random_state = 0
 )
 X_train, X_valid, Y_train, Y_valid = train_test_split(
@@ -68,3 +72,163 @@ X_train, X_valid, Y_train, Y_valid = train_test_split(
   test_size = 0.3, random_state = 0
 )
 ```
+
+```{python}
+# 形状を確認
+print("Y_train=", Y_train.shape, ", X_train=", X_train.shape)
+print("Y_valid=", Y_valid.shape, ", X_valid=", X_valid.shape)
+print("Y_test=", Y_test.shape, ", X_test=", X_test.shape)
+```
+
+## モデルの構築
+
+Kerasで層を重ねていくモデルを作る場合、 `tf.keras.Sequential` クラスを使用する。
+
+-   `layers.Dense()` は 全結合層（前の層からすべての入力を次の層へ出力する層）。
+-   `8` は出力する形状（任意の数を指定可）
+-   `activation = 'relu'` は活性化関数
+
+```{python}
+import tensorflow as tf
+
+model = tf.keras.Sequential([
+    # 入力層：今回は説明変数の列数が5なので5次元を指定
+    tf.keras.Input(shape = (5,)),
+    tf.keras.layers.Dense(8, activation = 'relu'),  # 全結合層
+    
+    # 隠れ層
+    tf.keras.layers.Dense(8, activation = 'relu'),
+    
+    # 出力層：今回は目的変数が一つなので、1を指定
+    tf.keras.layers.Dense(1)
+])
+```
+
+-   オプティマイザ：`rmsprop` の他にも `SGD` や `Adam` 等がある
+-   目的関数： `loss` で指定（今回は平均2乗誤差）
+-   学習性能評価の関数： `metrics` で指定（今回は平均絶対誤差 Mean Absolute Error）
+
+```{python}
+# モデルの構築
+model.compile(optimizer = "rmsprop", loss = 'mse', metrics = ['mae'])
+```
+
+```{python}
+# モデルの構造を表示
+model.summary()
+```
+
+## 学習の実施
+
+```{python}
+# 学習の実施
+log = model.fit(
+    X_train, Y_train,
+    epochs = 1000,
+    batch_size = 48,
+    verbose = True,
+    validation_data = (X_valid, Y_valid)
+)
+```
+
+## 学習結果の確認
+
+loss(学習データのMSE)が右肩下がりでどこまでも下がるのに対して、val_loss(検証データのMSE)は途中から下がらずやや右肩上がりになっている = エポック数が多すぎて過学習が発生している
+
+```{python}
+plt.clf() # plotの初期化
+plt.plot(log.history['loss'], label = 'loss')
+plt.plot(log.history['val_loss'], label = 'val_loss')
+plt.legend(frameon = False) # 凡例の表示
+plt.xlabel("epochs")
+plt.ylabel("MSE")
+plt.show()
+```
+
+## 過学習を防ぐモデルを作り直す
+
+過学習になる直前で停止させる `EarlyStopping` を活用
+
+```{python}
+# モデルを作り直す
+model = tf.keras.Sequential([
+    # 入力層
+    tf.keras.Input(shape=(5,)),
+    tf.keras.layers.Dense(8, activation='relu'),
+    # 隠れ層
+    tf.keras.layers.Dense(8, activation='relu'),
+    # 出力層
+    tf.keras.layers.Dense(1)
+])
+
+model.compile(optimizer="rmsprop", loss='mse', metrics=['mae'])
+
+# EarlyStoppingを入れて学習を実施
+log = model.fit(
+    X_train, Y_train,
+    epochs = 1000,
+    batch_size = 48,
+    verbose = True,
+    callbacks = [tf.keras.callbacks.EarlyStopping(
+      monitor = 'val_loss',
+      min_delta = 0,
+      patience = 100,
+      verbose = 1
+    )],
+    validation_data = (X_valid, Y_valid)
+)
+```
+
+```{python}
+# 改めてMSEをグラフ表示
+plt.clf() # plotの初期化
+plt.plot(log.history['loss'], label = 'loss')
+plt.plot(log.history['val_loss'], label = 'val_loss')
+plt.legend(frameon = False) # 凡例の表示
+plt.xlabel("epochs")
+plt.ylabel("MSE")
+plt.show()
+```
+
+## テストデータによる評価
+
+```{python}
+# テストデータによる予測。予測はpredictを使う
+Y_pred = model.predict(X_test)
+```
+
+正規化していた予測値を年棒に復元する
+
+```{python}
+# 正規化した値を元に戻すにはinverse_transformを使う
+# 行列の形はdatasetと一致している必要があるため、XとYを結合させる
+Y_test_ = sc.inverse_transform(
+  np.hstack([
+    Y_test.reshape(len(Y_test),1),
+    X_test
+  ])
+)[:, 0]
+
+Y_pred_ = sc.inverse_transform(
+  np.hstack([
+    Y_pred.reshape(len(Y_pred),1),
+    X_test
+  ])
+)[:, 0]
+
+```
+
+```{python}
+# MSE(平均2乗誤差)を算出
+mse = mean_squared_error(Y_test_, Y_pred_)
+print('MSE(Keras回帰モデル):', mse)
+```
+```{python}
+# 予測値と正解の散布図の表示
+plt.clf() # plotの初期化
+plt.plot(Y_test_, Y_pred_, 'k.')
+plt.xlabel("ture data")
+plt.ylabel("prediction")
+plt.show()
+```
+
