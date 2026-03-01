@@ -15,9 +15,6 @@ import tensorflow as tf
 
 # データの分割
 from sklearn.model_selection import train_test_split
-
-# DataFrameで全ての列を表示する設定
-pd.options.display.max_columns = None
 ```
 
 ## データ読込
@@ -48,6 +45,7 @@ dataset.head()
 ```
 
 今回は説明変数（petal_width, petal_length）の単位が両方cmであり値の範囲も概ね揃っているため、正規化は行なわない
+
 ```{python}
 # 目的変数（Y）：is_setosa、説明変数（X）：petal_widthとpetal_length
 Y = np.array(dataset['is_setosa'])
@@ -78,9 +76,9 @@ print("Y_test=", Y_test.shape, ", X_test=", X_test.shape)
 
 ## モデルの構築
 
-- 出力層の活性化関数に`sigmoid`を指定:確率が0から1の間の値で出力される
-- 目的関数に「binary_crossentropy」を指定
-- metrics（学習時の性能を評価する関数）には正解率「accuracy」を指定
+-   出力層の活性化関数に`sigmoid`を指定:確率が0から1の間の値で出力される
+-   目的関数に「binary_crossentropy」を指定
+-   metrics（学習時の性能を評価する関数）には正解率「accuracy」を指定
 
 ```{python}
 # モデルの初期化
@@ -146,6 +144,7 @@ Y_pred = model.predict(X_test)
 # Y_predを表示
 Y_pred
 ```
+
 「予測結果の確率が0.5より大きければ1、0.5以下なら0」にする計算
 
 ```{python}
@@ -153,6 +152,7 @@ Y_pred
 Y_pred_cls = (Y_pred > 0.5).astype("int32")
 Y_pred_cls
 ```
+
 ```{python}
 # 形状を正解（目的変数）に合わせる
 Y_pred_ = Y_pred_cls.reshape(-1)
@@ -164,3 +164,121 @@ from sklearn.metrics import classification_report
 print(classification_report(Y_test, Y_pred_))
 ```
 
+# 多項分類モデル
+
+## データの前処理
+
+```{python}
+# データの前処理
+# 目的変数をカテゴリー変数に展開する
+dataset2 = pd.get_dummies(data = dataset, columns = ['species'])
+dataset2.head()
+```
+
+```{python}
+# Y:目的変数、X:説明変数
+Y = np.array(dataset2[['species_0', 'species_1', 'species_2']])
+X = np.array(dataset2[['sepal_length', 'sepal_width', 'petal_length', 'petal_width']])
+```
+
+```{python}
+# データの分割
+X_train, X_test, Y_train, Y_test = train_test_split(
+  X, Y,
+  test_size = 0.3, random_state = 0
+)
+
+X_train, X_valid, Y_train, Y_valid = train_test_split(
+  X_train, Y_train,
+  test_size = 0.3, random_state = 0
+)
+```
+
+## モデルの構築
+
+```{python}
+# モデルの初期化
+model = tf.keras.Sequential([
+  # 入力層：今回は説明変数の列数が2なので2次元を指定
+  tf.keras.Input(shape = (4,)),
+  tf.keras.layers.Dense(16, activation = 'relu'),  # 全結合層
+  
+  # 隠れ層
+  tf.keras.layers.Dense(16, activation = 'relu'),
+  
+  # 出力層：今回は目的変数が一つなので、1を指定
+  tf.keras.layers.Dense(3, activation = 'softmax')
+])
+
+# モデルの構築
+# 目的変数がone-hotエンコードされている場合、lossを「categorical_crossentropy」とする
+model.compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = ['accuracy']
+)
+```
+
+```{python}
+# モデルの構造を表示
+model.summary()
+```
+
+## 学習の実施
+
+```{python}
+#| label:  学習の実施
+log = model.fit(
+    X_train, Y_train,
+    epochs = 5000,
+    batch_size = 32,
+    verbose = True,
+    callbacks = [tf.keras.callbacks.EarlyStopping(
+      monitor = 'val_loss',
+      min_delta = 0,
+      patience = 100,
+      verbose = 1
+    )],
+    validation_data = (X_valid, Y_valid)
+)
+```
+
+```{python}
+#| label: グラフ表示
+plt.clf() # plotの初期化
+plt.plot(log.history['loss'], label = 'loss')
+plt.plot(log.history['val_loss'], label = 'val_loss')
+plt.legend(frameon = False) # 凡例の表示
+plt.xlabel("epochs")
+plt.ylabel("crossentropy")
+plt.show()
+```
+
+## テストデータによる評価
+
+```{python}
+#| label: predictで予測を行なう
+Y_pred_0 = model.predict(X_test)
+```
+
+各行で一番数値が大きい＝確率が高い列の番号を抽出する。
+argmaxはリストで一番大きい値のインデックスを返す関数（「axis=1」は列方向を表す）
+
+```{python}
+# 多クラス分類は予測結果の各リストにおける最大値のインデックスを取得するようにする
+Y_pred = np.argmax(Y_pred_0, axis = 1)
+Y_pred
+```
+
+比較のため、カテゴリー変数に展開した Y_test の目的変数をクラス番号に復元
+
+```{python}
+Y_test_ = np.argmax(Y_test, axis = 1)
+```
+
+```{python}
+#| label: モデルの評価
+from sklearn.metrics import classification_report
+
+print(classification_report(Y_test_, Y_pred))
+```

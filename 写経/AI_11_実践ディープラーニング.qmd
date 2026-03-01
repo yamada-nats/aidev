@@ -1,0 +1,201 @@
+---
+title: "ディープラーニング02"
+---
+
+# 画像データの分類
+
+```{python}
+#| label: 必要なライブラリのimport
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+
+# Tensorflow
+import tensorflow as tf
+
+# データの分割
+from sklearn.model_selection import train_test_split
+
+# 画像データのデータセットを取得するためにsklearnを使用
+from sklearn import datasets
+```
+
+## データの読込
+
+```{python}
+#| label: MNISTのデータセットを読み込む
+# （scikit-learnに添付されている手書き数字のデータセット）
+digits = datasets.load_digits()
+```
+
+```{python}
+#| label: digitsの構成
+digits.keys()
+```
+
+```{python}
+#| label: 説明の表示
+print(digits['DESCR'])
+```
+
+```{python}
+#| label: data:説明変数
+digits['data'] .shape
+```
+
+1枚だけ画像データの中身を確認
+
+```{python}
+#| label: dataから1枚の画像データを取得
+temp = digits['data'][0]
+
+# 8x8にreshape
+temp = temp.reshape(8, 8)
+temp
+```
+
+Matplotlibの imshow を使うとリストを画像として出力できる
+
+```{python}
+#| label: 画像化して表示
+# カラーマップは 'Greys' を使用（数値が大きいほどピクセルは黒く表示される）
+plt.imshow(temp, cmap = 'Greys', vmin = 0, vmax = 15)
+```
+
+```{python}
+#| label: 対応する目的変数を確認
+digits['target'][0]
+```
+
+## データの前処理
+
+```{python}
+#| label: 目的変数と説明変数
+# 目的変数（Y）：target、説明変数（X）：data
+Y = digits['target']
+X = digits['data']
+```
+
+```{python}
+#| label: 形状の確認
+print(Y.shape)
+print(X.shape)
+```
+
+多クラス分類問題なので、目的変数をカテゴリー変数に展開  
+※Pandasの `get_dummies` と同じ機能の関数 `to_categorical` がkeras にも存在するので今回はそちらを使用
+
+```{python}
+#| label: カテゴリー変数への展開
+Y = tf.keras.utils.to_categorical(Y)
+```
+
+```{python}
+#| label: 改めて形状の確認
+print(Y.shape)
+print(X.shape)
+
+# Yのデータを1個確認
+print(Y[0])
+```
+
+##  Dense（全結合）層のみを使ったモデルの構築と学習
+
+### モデルの構築
+
+```{python}
+#| label: データの分割
+X_train, X_test, Y_train, Y_test = train_test_split(
+  X, Y,
+  test_size = 0.3, random_state = 0
+)
+X_train, X_valid, Y_train, Y_valid = train_test_split(
+  X_train, Y_train,
+  test_size = 0.3, random_state = 0
+)
+```
+
+```{python}
+#| label: 形状を確認
+print("Y_train=", Y_train.shape, ", X_train=", X_train.shape)
+print("Y_valid=", Y_valid.shape, ", X_valid=", X_valid.shape)
+print("Y_test=", Y_test.shape, ", X_test=", X_test.shape)
+```
+
+```{python}
+#| label: モデルの初期化
+model = tf.keras.Sequential([
+    # 入力層
+    tf.keras.Input(shape = (64,)),
+    tf.keras.layers.Dense(16, activation = 'relu'),  # 全結合層
+    
+    # 隠れ層
+    tf.keras.layers.Dense(16, activation = 'relu'),
+    
+    # 出力層：今回は目的変数が一つなので、1を指定
+    tf.keras.layers.Dense(10, activation = 'softmax')
+])
+
+# モデルの構築
+model.compile(
+  optimizer = "rmsprop",
+  loss = 'categorical_crossentropy',
+  metrics = ['accuracy']
+)
+```
+
+```{python}
+#| label: モデルの構造を表示
+model.summary()
+```
+
+### 学習の実施
+
+```{python}
+#| label: 学習の実施
+log = model.fit(
+    X_train, Y_train,
+    epochs = 5000,
+    batch_size = 32,
+    verbose = True,
+    callbacks = [tf.keras.callbacks.EarlyStopping(
+      monitor = 'val_loss',
+      min_delta = 0,
+      patience = 100,
+      verbose = 1
+    )],
+    validation_data = (X_valid, Y_valid)
+)
+```
+
+```{python}
+#| label: 学習過程をグラフ表示
+plt.clf() # plotの初期化
+plt.plot(log.history['loss'], label = 'loss')
+plt.plot(log.history['val_loss'], label = 'val_loss')
+plt.legend(frameon = False) # 凡例の表示
+plt.xlabel("epochs")
+plt.ylabel("crossentropy")
+plt.show()
+```
+
+### テストデータによる評価
+
+予測結果は np.argmax() でカテゴリー変数からクラス番号に復元する
+
+```{python}
+#| label: テストデータで予測を実施し、カテゴリー変数へ復元する
+Y_pred = np.argmax(model.predict(X_test), axis = 1)
+```
+
+```{python}
+#| label: テストデータのカテゴリー変数への復元
+Y_test_ = np.argmax(Y_test, axis = 1)
+```
+
+```{python}
+#| label: モデルの評価
+from sklearn.metrics import classification_report
+
+print(classification_report(Y_test_, Y_pred))
+```
