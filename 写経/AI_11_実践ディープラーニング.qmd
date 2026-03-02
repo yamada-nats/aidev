@@ -82,7 +82,7 @@ print(Y.shape)
 print(X.shape)
 ```
 
-多クラス分類問題なので、目的変数をカテゴリー変数に展開  
+多クラス分類問題なので、目的変数をカテゴリー変数に展開\
 ※Pandasの `get_dummies` と同じ機能の関数 `to_categorical` がkeras にも存在するので今回はそちらを使用
 
 ```{python}
@@ -99,7 +99,7 @@ print(X.shape)
 print(Y[0])
 ```
 
-##  Dense（全結合）層のみを使ったモデルの構築と学習
+## Dense（全結合）層のみを使ったモデルの構築と学習
 
 ### モデルの構築
 
@@ -199,3 +199,231 @@ from sklearn.metrics import classification_report
 
 print(classification_report(Y_test_, Y_pred))
 ```
+
+## CNN（畳み込み）層を使ったモデルの構築と学習
+
+### CNNの強み
+
+-   移動不変 ：\
+    出力値は入力データの画像をずらしたような結果になっています。これは、元の「2」という形は保ったまま、位置を変えた情報も学習できていることを指します。人間も数字の形で判断しているのであって位置は問いません。このように、位置によらず判断が行えることを 移動不変 と呼びます
+
+-   抽象化 ：\
+    フィルターを適用することで、単純に入力データの画像からは得られないような特徴を抽出できます。具体的にはエッジや輪郭などの特徴です。これは後述するプーリング層と組み合わせることで、より効果を発揮します。
+
+-   重み共有 ：\
+    重みが共有されることでパラメータ数を減らせ、過学習が起こりづらくなります。
+
+### モデルの構築
+
+```{python}
+#| label: 8x8の画像の形状にreshape
+
+X2 = X.reshape(len(X), 8, 8, 1)
+print(X2.shape)
+```
+
+```{python}
+#| label: データの分割。X2を使っていることに注意
+X_train, X_test, Y_train, Y_test = train_test_split(
+  X2, Y,
+  test_size = 0.3, random_state = 0
+)
+X_train, X_valid, Y_train, Y_valid = train_test_split(
+  X_train, Y_train,
+  test_size = 0.3, random_state = 0
+)
+```
+
+```{python}
+#| label: 形状を確認
+print("Y_train=", Y_train.shape, ", X_train=", X_train.shape)
+print("Y_valid=", Y_valid.shape, ", X_valid=", X_valid.shape)
+print("Y_test=", Y_test.shape, ", X_test=", X_test.shape)
+```
+
+畳み込み層は `Dense` ではなく `Conv2D` を使用する。\
+第一引数：フィルターの数。今回は32
+
+-   kernel_size ：フィルターの大きさ。今回は 3x3 のフィルターとなる
+-   padding ：パディングの有無を指定。「same」は基の画像と同じサイズになるように調整。パディングしない場合は「valid」を指定
+-   strides ：ずらす幅。今回は1
+
+また、最終的に出力層から出力されるデータは1次元の10分類であるため、`Conv2D` から次の隠れ層へデータを渡すために、多次元の入力を1次元に変換する `Flatten` 層も利用する。
+
+```{python}
+#| label: モデルの初期化
+model = tf.keras.Sequential([
+  # 入力層
+  tf.keras.Input(shape = (8, 8, 1)),
+  tf.keras.layers.Conv2D(
+    32,
+    kernel_size = 3,
+    padding = "same",
+    strides = 1,
+    activation = 'relu'
+  ),
+  tf.keras.layers.Flatten(),
+  
+  # 隠れ層
+  tf.keras.layers.Dense(16, activation = 'relu'),
+  
+  # 出力層
+  tf.keras.layers.Dense(10, activation = 'softmax')
+])
+
+# モデルの構築
+model.compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = ['accuracy']
+)
+```
+
+```{python}
+#| label: モデルの構造を表示
+model.summary()
+```
+
+### 学習の実施
+
+```{python}
+#| label: 学習の実施
+log = model.fit(
+    X_train, Y_train,
+    epochs = 5000,
+    batch_size = 32,
+    verbose = True,
+    callbacks = [tf.keras.callbacks.EarlyStopping(
+      monitor = 'val_loss',
+      min_delta = 0,
+      patience = 100,
+      verbose = 1
+    )],
+    validation_data = (X_valid, Y_valid)
+)
+```
+
+```{python}
+#| label: 学習過程をグラフ表示
+plt.clf() # plotの初期化
+plt.plot(log.history['loss'], label = 'loss')
+plt.plot(log.history['val_loss'], label = 'val_loss')
+plt.legend(frameon = False) # 凡例の表示
+plt.xlabel("epochs")
+plt.ylabel("crossentropy")
+plt.show()
+```
+
+### テストデータによる評価
+
+```{python}
+#| label: テストデータで予測を実施し、カテゴリー変数へ復元する
+Y_pred = np.argmax(model.predict(X_test), axis = 1)
+
+# テストデータのカテゴリー変数の復元
+Y_test_ = np.argmax(Y_test, axis = 1)
+
+# モデルの評価
+print(classification_report(Y_test_, Y_pred))
+```
+
+### 畳み込み層の学習の詳細
+
+```{python}
+#| label: テストデータの0番目を可視化
+plt.clf() # plotの初期化
+plt.imshow(X_test[0].reshape(8, 8), cmap = 'Greys')
+plt.tick_params(left = False, labelleft = False, bottom = False, labelbottom = False)
+plt.show()
+```
+
+```{python}
+#| label: 対応するラベルを確認
+np.argmax(Y_test[0])
+```
+
+```{python}
+#| label: モデルの重み（パラメータ）の取得
+w = model.get_weights()
+
+# 0番目の層（Conv2D)を取得
+w0 = w[0]
+
+# 形状の確認
+w0.shape
+```
+
+※ 3x3のグレースケールのフィルターが32枚保持されている、ということ
+
+```{python}
+#| label: Conv2D層のフィルターの可視化
+
+plt.clf() # plotの初期化
+
+# 4行8列にグラフを分割
+fig, ax = plt.subplots(4, 8, figsize = (8,4))
+
+for i in range(4):
+    for j in range(8):
+        # zは左上から数えたグラフの描画位置
+        z = i * 8 + j
+        
+        # 行=i、列=jの位置に画像を描画する
+        ax[i, j].imshow(w0[:, :, :, z].reshape(3,3), cmap = 'Greys')
+        
+        # 目盛を表示しない設定
+        ax[i, j].tick_params(left = False, labelleft = False, bottom = False, labelbottom = False)
+
+plt.show()
+```
+
+```{python}
+#| label: Conv2D層の出力値を可視化
+
+# 各層の出力を取得
+layer_outputs = [layer.output for layer in model.layers]
+
+# 最初の層の情報を表示
+print(layer_outputs[0])
+
+# モデル全体の入力部分の情報を表示
+print(model.inputs[0])
+```
+
+入力データとフィルターとの演算により多くの出力が得られていることを確認するためのモデルを作成
+
+```{python}
+#| label: 入力:モデルの入力、出力:Conv2Dの出力
+activation_model = tf.keras.Model(inputs = model.inputs[0], outputs = layer_outputs[0])
+activation_model.summary()
+```
+
+
+```{python}
+#| label: 予測:Conv2Dの結果が出力される
+activations = activation_model.predict(X_test[0:1])
+```
+
+```{python}
+#| label: Conv2D層の結果を可視化
+
+plt.clf() # plotの初期化
+
+# 4行8列にグラフを分割
+fig, ax = plt.subplots(4,8, figsize = (16, 8))
+
+for i in range(4):
+    for j in range(8):
+        # zは左上から数えたグラフの描画位置
+        z = i * 8 + j
+        
+        # 行=i、列=jの位置に画像を描画する
+        ax[i, j].imshow(activations[0, :, :, z], cmap = 'Greys')
+        
+        # 目盛を表示しない設定
+        ax[i, j].tick_params(left = False, labelleft = False, bottom = False, labelbottom = False)
+
+plt.show()
+```
+
+

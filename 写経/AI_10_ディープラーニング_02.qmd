@@ -227,7 +227,7 @@ model.summary()
 ## 学習の実施
 
 ```{python}
-#| label:  学習の実施
+#| label: 学習の実施
 log = model.fit(
     X_train, Y_train,
     epochs = 5000,

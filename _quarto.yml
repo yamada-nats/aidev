@@ -7,5 +7,3 @@ execute:
 format:
   html:
     theme: cosmo    # 全体のテーマ（見た目）
-    
-jupyter: python3
