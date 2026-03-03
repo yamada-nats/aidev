@@ -241,9 +241,9 @@ print("Y_valid=", Y_valid.shape, ", X_valid=", X_valid.shape)
 print("Y_test=", Y_test.shape, ", X_test=", X_test.shape)
 ```
 
-畳み込み層は `Dense` ではなく `Conv2D` を使用する。\
-第一引数：フィルターの数。今回は32
+畳み込み層は `Dense` ではなく `Conv2D` を使用する。
 
+-   第一引数：フィルターの数。今回は32
 -   kernel_size ：フィルターの大きさ。今回は 3x3 のフィルターとなる
 -   padding ：パディングの有無を指定。「same」は基の画像と同じサイズになるように調整。パディングしない場合は「valid」を指定
 -   strides ：ずらす幅。今回は1
@@ -398,7 +398,6 @@ activation_model = tf.keras.Model(inputs = model.inputs[0], outputs = layer_outp
 activation_model.summary()
 ```
 
-
 ```{python}
 #| label: 予測:Conv2Dの結果が出力される
 activations = activation_model.predict(X_test[0:1])
@@ -426,4 +425,109 @@ for i in range(4):
 plt.show()
 ```
 
+## モデルの性能を上げよう
 
+-   適切なパラメータ：入力層や隠れ層の場合、出力形状は入力形状と同等～10倍ぐらいの範囲にするのが一般的。出力層の場合は、分類モデルであれば分類の数、回帰モデルであれば1。急激なパラメータ減少が起きる場合は間に層を入れることも多い
+-   プーリング層：学習データを抽象化し、新たな特徴を得る層。たとえば画像データであれば輪郭や直線などの特徴を抽出できる。領域内の最大値を取る `MAXプーリング`（最大プーリング：一般的に使われる）、平均値を取る `平均プーリング` などがある
+-   ドロップアウト層：過学習を防止する層。指定された割合でランダムに、出力を0にする。層の前半では0.25(25%)、後半は0.5(50%)を指定することが一般的
+-   正則化：
+    -   L1正則化 ＝ 余計な説明変数を削除するようパラメータ調整
+    -   L2正則化 ＝ パラメータが大きくなるのを防ぎ過学習を抑制
+
+```{python}
+#| label: モデルの完成形（チューニング後）
+
+# モデルの初期化
+model = tf.keras.Sequential([
+
+  # 入力層
+  tf.keras.Input(shape = (8, 8, 1)),
+
+  # 最初の畳み込みブロック
+  tf.keras.layers.Conv2D(
+    64,
+    kernel_size = 3,
+    padding = "same",
+    activation = 'relu'
+  ),
+  tf.keras.layers.MaxPooling2D(pool_size = (2, 2)),
+  tf.keras.layers.Dropout(0.25),
+
+  # 2番目の畳み込みブロック
+  tf.keras.layers.Conv2D(
+    128,  # 前のユニットのプーリングで画像サイズが半分になったため、フィルター数を倍の128に増やす
+    kernel_size = 3,
+    padding = "same",
+    activation = 'relu'
+  ),
+  tf.keras.layers.MaxPooling2D(pool_size = (2, 2)),
+  tf.keras.layers.Dropout(0.25),
+
+  #全結合層への準備
+  tf.keras.layers.Flatten(),
+  tf.keras.layers.Dense(
+    64,
+    activation = 'relu',
+    kernel_regularizer = tf.keras.regularizers.l2(0.0001)  # 正則化
+  ),
+  tf.keras.layers.Dropout(0.5),
+  
+  # 出力層
+  tf.keras.layers.Dense(10, activation = 'softmax')
+])
+
+# モデルの構築
+model.compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = ['accuracy']
+)
+```
+
+```{python}
+#| label: モデルの構造を表示
+model.summary()
+```
+
+```{python}
+#| label: 学習の実施
+log = model.fit(
+    X_train, Y_train,
+    epochs = 5000,
+    batch_size = 32,
+    verbose = True,
+    callbacks = [tf.keras.callbacks.EarlyStopping(
+      monitor = 'val_loss',
+      min_delta = 0,
+      patience = 100,
+      verbose = 1
+    )],
+    validation_data = (X_valid, Y_valid)
+)
+```
+
+```{python}
+#| label: 学習過程をグラフ表示
+plt.clf() # plotの初期化
+plt.plot(log.history['loss'], label = 'loss')
+plt.plot(log.history['val_loss'], label = 'val_loss')
+plt.legend(frameon = False) # 凡例の表示
+plt.xlabel("epochs")
+plt.ylabel("crossentropy")
+plt.show()
+```
+
+```{python}
+#| label: テストデータで予測を実施し、カテゴリー変数へ復元する
+Y_pred = np.argmax(model.predict(X_test), axis = 1)
+```
+
+```{python}
+#| label: テストデータのカテゴリー変数への復元
+Y_test_ = np.argmax(Y_test, axis = 1)
+```
+
+```{python}
+#| label: モデルの評価
+print(classification_report(Y_test_, Y_pred))
+```
