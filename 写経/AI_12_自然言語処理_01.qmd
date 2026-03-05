@@ -1,0 +1,263 @@
+---
+title: "AI_12_ディープラーニングの応用：自然言語処理"
+---
+
+# 回帰結合型ニューラルネットワーク（RNN）
+
+```{python}
+#| label: 必要なライブラリのimport
+import numpy as np
+import math
+import matplotlib.pyplot as plt
+import pandas as pd
+import tensorflow as tf
+from sklearn.model_selection import train_test_split
+
+# 生成する乱数を固定させる
+np.random.seed(seed = 0)
+```
+
+## データセットの作成
+
+時系列のサンプルデータとして、「sin波」のデータを作成する
+
+```{python}
+#| label: sin波関数の定義
+# サンプリング周波数（1秒あたりのサンプリング数）
+F = 100
+# 周波数
+Hz = 1
+# サンプリング秒数
+SEC = 5
+
+# sin波の実装
+def sin(t):
+    return np.sin(2.0 * np.pi * (t * Hz) / F)
+```
+
+```{python}
+#| label: sin波のデータセットを作成
+t = np.arange(0, F * SEC + 1)
+dataset = sin(t)
+```
+
+```{python}
+# label: sin波のグラフ表示
+plt.figure(figsize = (16,4))
+plt.plot(t, dataset)
+plt.show()
+```
+
+
+```{python}
+#| label: ノイズを加える
+dataset = sin(t) + np.random.normal(loc = 0.0, scale = 0.1, size = len(t))
+```
+
+```{python}
+#| label: ノイズを加えたsin波のグラフ表示
+plt.clf() # plotの初期化
+plt.figure(figsize = (16,4))
+plt.plot(t, dataset)
+plt.show()
+```
+
+## 目的変数と説明変数の作成
+
+```{python}
+#| label: 目的変数と説明変数
+
+# 入力データ長（順伝播の長さ）
+T = 20
+
+# 説明変数：目的変数の過去の情報
+X = []
+
+# 目的変数
+Y = []
+
+# 説明変数と目的変数の作成
+for i in range(0, len(dataset) - T):
+    X.append(dataset[i:i+T])
+    Y.append(dataset[i+T])
+
+# XとYが正しく取得されていることを確認
+print(dataset[0:T+1])
+print(X[0])
+print(Y[0])
+```
+
+
+```{python}
+#| label: 学習用にreshape
+X = np.array(X).reshape(-1, T, 1)
+Y = np.array(Y).reshape(-1, 1)
+
+# 形状を確認
+print("Y=", Y.shape, ", X=", X.shape)
+```
+
+今回は時系列データのため、データのシャッフルは行わず、前半70％を学習データとする
+
+```{python}
+#| label: データの分割
+X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.3, shuffle=False)
+X_train, X_valid, Y_train, Y_valid = train_test_split(X_train, Y_train, test_size=0.3, shuffle=False)
+
+# 形状を確認
+print("Y_train=", Y_train.shape, ", X_train=", X_train.shape)
+print("Y_valid=", Y_valid.shape, ", X_valid=", X_valid.shape)
+print("Y_test=", Y_test.shape, ", X_test=", X_test.shape)
+```
+
+## モデルの構築
+
+Kerasでは、RNN層は SimpleRNN を使う
+
+```{python}
+#| label: モデルの構築
+
+# 出力数（回帰のため1）
+OUT_SIZE = 1
+
+# 隠れ層のユニット数
+HIDE_SIZE = 100
+
+# RNNの入力形状: 任意のタイムステップ長, 1つの特徴量
+rnn_input_shape = (None, 1)
+
+# モデルの初期化
+model = tf.keras.Sequential([
+    # 入力層
+    tf.keras.Input(shape = rnn_input_shape),
+    # RNN層
+    tf.keras.layers.SimpleRNN(HIDE_SIZE),
+    # 出力層
+    tf.keras.layers.Dense(OUT_SIZE, activation = 'linear')
+])
+
+
+# モデルの構築
+model.compile(optimizer = tf.keras.optimizers.Adam(), loss = 'mean_squared_error')
+```
+
+```{python}
+#| label: 学習の実施
+log = model.fit(
+    X_train, Y_train,
+    epochs = 50,
+    batch_size = 32,
+    verbose = True,
+    callbacks=[tf.keras.callbacks.EarlyStopping(
+        monitor = 'val_loss',
+        min_delta = 0, patience = 100, verbose = 1
+    )],
+    validation_data = (X_valid, Y_valid)
+    )
+```
+
+```{python}
+#| label: モデルの構造を表示
+model.summary()
+```
+
+## 学習の経過の確認
+
+```{python}
+#| label: 学習の経過をグラフ表示
+plt.clf() # plotの初期化
+plt.plot(log.history['loss'], label = 'loss')
+plt.plot(log.history['val_loss'], label = 'val_loss')
+plt.legend(frameon = False) # 凡例の表示
+plt.xlabel("epochs")
+plt.ylabel("crossentropy")
+plt.show()
+```
+
+## テストデータによる評価
+
+```{python}
+#| label: 予測
+preds_ys = model.predict(X_test)
+```
+
+```{python}
+#| label:  正解（青）と予測値（赤）との比較
+plt.clf() # plotの初期化
+plt.figure(figsize = (16,4))
+plt.plot(range(0, len(X)), Y, color = 'blue')
+plt.plot(range(len(X_train)+len(X_valid)+1, len(X)+1), preds_ys, color = 'red')
+```
+
+
+```{python}
+#| label: MSEを算出
+0.5 * ((Y_test - preds_ys) **2).sum()
+```
+ label:
+ eval = False 
+# 長・短期記憶（LSTM）
+
+LSTMは、RNNの隠れ層を「セル」と呼ばれる構造に置き換え、RNNで長期間の時系列データを扱う際に発生しやすいをｗ「勾配消失」や「勾配爆発」を解決する。
+モデルはRNNモデルの「SimpleRNN」を「LSTM」に変更するだけ。
+
+```{python}
+#| label: モデルの初期化
+model_lstm = tf.keras.Sequential([
+    # 入力層
+    tf.keras.Input(shape = rnn_input_shape),
+    # RNN層
+    tf.keras.layers.LSTM(HIDE_SIZE),
+    # 出力層
+    tf.keras.layers.Dense(OUT_SIZE, activation = 'linear')
+])
+
+# モデルの構築
+model_lstm.compile(optimizer = tf.keras.optimizers.Adam(), loss = 'mean_squared_error')
+```
+
+```{python}
+#| label: 学習の実施
+log_lstm = model_lstm.fit(
+    X_train, Y_train,
+    epochs = 50,
+    batch_size = 32,
+    verbose = True,
+    callbacks=[tf.keras.callbacks.EarlyStopping(
+        monitor = 'val_loss',
+        min_delta = 0, patience = 100, verbose = 1
+    )],
+    validation_data = (X_valid, Y_valid)
+    )
+```
+
+```{python}
+#| label: モデルの構造を表示
+model_l
+stm.summary()
+```
+```{python}
+#| label: 学習の経過をグラフ表示
+plt.clf() # plotの初期化
+plt.plot(log_lstm.history['loss'], label = 'loss')
+plt.plot(log_lstm.history['val_loss'], label = 'val_loss')
+plt.legend(frameon = False) # 凡例の表示
+plt.xlabel("epochs")
+plt.ylabel("crossentropy")
+plt.show()
+```
+
+## テストデータによる評価
+
+```{python}
+#| label: 予測
+preds_ys_lstm = model_lstm.predict(X_test)
+```
+
+```{python}
+#| label:  正解（青）と予測値（赤）との比較
+plt.clf() # plotの初期化
+plt.figure(figsize = (16,4))
+plt.plot(range(0, len(X)), Y, color = 'blue')
+plt.plot(range(len(X_train)+len(X_valid)+1, len(X)+1), preds_ys_lstm, color = 'red')
+```
