@@ -1,0 +1,228 @@
+---
+title: "AI_12_ディープラーニングの応用：自然言語処理"
+---
+
+# 自然言語処理（NLP）の手法・モデル
+
+## Transformerモデル
+
+```{python}
+#| label: 必要なライブラリのimport
+import numpy as np
+import pandas as pd
+from itertools import accumulate
+import tensorflow as tf
+from transformers import AutoTokenizer, TFAutoModelForSequenceClassification
+```
+
+```{python}
+#| label: 複数列をまとめる関数を定義
+
+def create_nested_dict(df, prefix):
+    emotions = ["Joy", "Sadness", "Anticipation", "Surprise", "Anger", "Fear", "Disgust", "Trust"]
+    # 該当する列をフィルタリング
+    cols = [col for col in df.columns if col.startswith(prefix)]
+    if not cols:
+        return pd.Series([None] * len(df))
+
+    # 辞書を作成
+    return df[cols].apply(
+        lambda row: {
+            emotion.lower(): row[f"{prefix}{emotion}"] for emotion in emotions if f"{prefix}{emotion}" in row.index
+        }, axis=1
+    )
+```
+
+### データセット読込
+
+"WRIME" データセット
+
+-   sentence：文章
+-   writer：この文章を書いた人の主観による感情の評価
+-   reader1 〜 reader3：この文章を読んだ3名の客観による感情の評価
+-   avg_readers：reader1 〜 reader3 の平均値
+
+感情の情報は、Pythonの辞書形式で登録
+
+前処理
+
+-   改行の削除や列名の整理
+-   複数の列をまとめた新しい列の作成
+-   訓練・検証・テストへの分割
+
+```{python}
+#| label: 今回利用するデータセットのダウンロード
+dataset_df = pd.read_csv("https://github.com/ids-cv/wrime/raw/master/wrime-ver1.tsv", sep="\t")
+
+# データの調整
+# 1. Sentence列のデータから改行を削除
+dataset_df["Sentence"] = dataset_df["Sentence"].str.replace("\\n", "")
+
+# 2. SentenceとUserIDの列名を変更
+dataset_df = dataset_df.rename(columns = {"Sentence": "sentence", "UserID": "user_id", "Datetime": "datetime"})
+
+# 3. 複数の列をまとめた新しい列を作成
+dataset_df["writer"] = create_nested_dict(dataset_df, "Writer_")
+dataset_df["reader1"] = create_nested_dict(dataset_df, "Reader1_")
+dataset_df["reader2"] = create_nested_dict(dataset_df, "Reader2_")
+dataset_df["reader3"] = create_nested_dict(dataset_df, "Reader3_")
+dataset_df["avg_readers"] = create_nested_dict(dataset_df, "Avg. Readers_")
+
+# 4. 訓練データ／検証データ／テストデータに分割し、Train/Dev/Test列を削除
+train_df = dataset_df[dataset_df["Train/Dev/Test"] == "train"].reset_index(drop=True)[[
+    "sentence", "user_id", "datetime", "writer", "reader1", "reader2", "reader3", "avg_readers"
+]]
+dev_df = dataset_df[dataset_df["Train/Dev/Test"] == "dev"].reset_index(drop=True)[[
+    "sentence", "user_id", "datetime", "writer", "reader1", "reader2", "reader3", "avg_readers"
+]]
+test_df = dataset_df[dataset_df["Train/Dev/Test"] == "test"].reset_index(drop=True)[[
+    "sentence", "user_id", "datetime", "writer", "reader1", "reader2", "reader3", "avg_readers"
+]]
+
+# 5. CPUでの実行時間を考慮し、訓練データ数を調整 (例: 5000件)
+# もしメモリや時間に余裕があれば、より多くのデータを使用することも可能
+num_train_samples = 5000
+train_df = train_df[:num_train_samples]
+
+train_df.head()
+```
+
+```{python}
+#| label: trainデータの最初の'avg_readers'を確認
+train_df.loc[0, "avg_readers"]
+```
+
+```{python}
+#| label: 感情のkeyをリストにする
+em_keys = list(train_df.loc[0, "avg_readers"].keys())
+```
+
+```{python}
+#| label: それぞれのDataFrameに'emotion'列を追加し、数値が一番大きいavg_readersのkeyを格納する
+train_df["emotion"] = [em_keys.index(max(em, key = em.get)) for em in train_df["avg_readers"]]
+```
+
+```{python}
+#| label: sentence列とemotion列のみ残す
+train_df = train_df.drop(["user_id", "datetime", "writer", "reader1", "reader2", "reader3", "avg_readers"], axis = 1)
+train_df.head()
+```
+
+```{python}
+train_df.groupby("emotion"). count()
+```
+
+## 文章データの前処理
+
+```{python}
+#| label: 文章データの前処理
+# シンボリックリンクの警告を表示させない
+import os
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
+# sentenceの文章をトークナイザーで前処理する
+# 軽量な多言語対応モデルのトークナイザーを指定
+tokenizer_name = "distilbert-base-multilingual-cased"
+tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+
+tokenized_data = tokenizer(
+    train_df["sentence"].to_list(),
+    return_tensors="np",  # TensorFlow形式のテンソルで返す
+    padding=True,         # 短いシーケンスをパディング
+    truncation=True,      # 長いシーケンスを切り捨て
+    max_length=512        # モデルが扱える最大長に設定 (多くのモデルで一般的)
+)
+tokenized_data = dict(tokenized_data)  # 辞書形式に変換しておく
+tokenized_data
+```
+
+```{python}
+#| label: emotion列をndarrayにする
+emotions = np.array(train_df["emotion"])
+```
+
+## ファインチューニングしてモデルを構築する
+
+```{python}
+#| label: モデルを作成して学習させる
+model_name = "distilbert-base-multilingual-cased"
+model = TFAutoModelForSequenceClassification.from_pretrained(model_name, num_labels=8, from_pt=True)
+
+# オプティマイザや学習率を設定
+# 軽量モデルやCPU実行の場合、学習率やバッチサイズの調整が効果的なことがあります。
+optimizer = tf.keras.optimizers.Adam(learning_rate=5e-5) # 一般的な学習率
+# model.compileのlossは、TFAutoModelForSequenceClassification.from_pretrainedでfrom_pt=TrueとしてPyTorchの重みをロードした場合や、
+# カスタム損失関数を使わない場合は、通常モデル内部で処理されるか、フレームワーク標準の損失関数が使われます。
+# Hugging FaceのTFモデルでは、loss引数をcompile時に指定せず、fit時に直接ラベルを渡すことで内部損失が使われることが多いです。
+# ここでは明示的に`model.hf_compute_loss`を使っていますが、もしこれが原因で別のエラーが出る場合は、
+# `loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)` のような標準的な損失関数を試すことも検討できます。
+# ただし、Hugging Faceのドキュメントでは `model.hf_compute_loss` または `loss=model.hf_compute_loss()` の使用が推奨される場合があります。
+model.compile(optimizer=optimizer, loss=model.hf_compute_loss, metrics=['accuracy']) # metricsを追加して精度を監視
+
+# バッチサイズとエポック数を設定
+# CPU実行ではバッチサイズを小さめ (例: 8, 16) に、エポック数も少なめ (例: 1-3) にすると時間短縮になります。
+batch_size = 16
+epochs = 1 # まずは1エポックで試すなど、調整してください
+
+print("ファインチューニングを開始します。CPUでは時間がかかる場合があります...")
+# tokenized_dataは辞書形式である必要があります。{'input_ids': ..., 'attention_mask': ...}
+# emotionsはラベルのnumpy配列です。
+model.fit(dict(tokenized_data), emotions, batch_size=batch_size, epochs=epochs)
+print("ファインチューニングが完了しました。")
+```
+
+```{python}
+#| label: testデータについても同様に前処理をしていく
+test_df["emotion"] = [em_keys.index(max(em, key = em.get)) for em in test_df["avg_readers"]]
+test_df = test_df.drop(["user_id", "datetime", "writer", "reader1", "reader2", "reader3", "avg_readers"], axis = 1)
+test_df.head()
+
+test_emotions = np.array(test_df["emotion"])
+
+test_tokenized_data = tokenizer(
+    test_df["sentence"].to_list(),
+    return_tensors="np",
+    padding=True,
+    truncation=True,
+    max_length=512
+)
+test_tokenized_data = dict(test_tokenized_data)
+test_tokenized_data
+```
+
+```{python}
+#| label: testデータで予測を実施
+print("テストデータで予測を開始します...")
+predictions = model.predict(test_tokenized_data)
+print("予測が完了しました。")
+```
+
+```{python}
+#| label: 実行結果をそのまま表示してみる
+predictions
+```
+
+```{python}
+#| label: 一番大きい確率のものを予測結果とする形で調整する
+# model.predictの出力がTFSequenceClassifierOutputオブジェクトの場合、.logitsでアクセス
+pred_emotions = np.argmax(predictions.logits, axis = 1)
+pred_emotions
+```
+
+```{python}
+#| label: 実際の値を確認
+test_emotions
+```
+
+```{python}
+#| label: 混同行列
+from sklearn import metrics
+print("混同行列:")
+print(metrics.confusion_matrix(test_emotions, pred_emotions))
+```
+
+```{python}
+#| label: 正解率
+accuracy = metrics.accuracy_score(test_emotions, pred_emotions)
+print(f"正解率： {accuracy:.4f}")
+```

@@ -194,9 +194,10 @@ plt.plot(range(len(X_train)+len(X_valid)+1, len(X)+1), preds_ys, color = 'red')
 #| label: MSEを算出
 0.5 * ((Y_test - preds_ys) **2).sum()
 ```
- label:
- eval = False 
+
 # 長・短期記憶（LSTM）
+
+## モデルの構築
 
 LSTMは、RNNの隠れ層を「セル」と呼ばれる構造に置き換え、RNNで長期間の時系列データを扱う際に発生しやすいをｗ「勾配消失」や「勾配爆発」を解決する。
 モデルはRNNモデルの「SimpleRNN」を「LSTM」に変更するだけ。
